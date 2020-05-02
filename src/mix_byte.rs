@@ -40,6 +40,12 @@ impl Byte {
     }
 }
 
+impl std::fmt::Display for Byte {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.v)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,5 +66,6 @@ mod tests {
         assert_eq!(100, Byte::max());
         *b.val_mut() = 99;
         assert!(b.inc());
+        assert_eq!(Ok(()), Byte::set_max(64));
     }
 }

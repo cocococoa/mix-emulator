@@ -139,6 +139,22 @@ impl WordImpl {
     }
 }
 
+impl std::fmt::Display for WordImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s = match self.sign {
+            Sign::Positive => "+",
+            Sign::Negative => "-",
+            Sign::NoSuchField => "",
+        };
+        let b = self
+            .bytes
+            .iter()
+            .map(|byte| format!("{} ", byte))
+            .collect::<String>();
+        write!(f, "{} {}", s, b)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
