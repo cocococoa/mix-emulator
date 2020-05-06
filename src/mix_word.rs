@@ -46,7 +46,7 @@ impl Byte {
 
 impl std::fmt::Display for Byte {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.v)
+        write!(f, "{:2}", self.v)
     }
 }
 

@@ -88,11 +88,18 @@ fn main() {
     // 実行時情報を分析
     let code = split_by_line(code.to_string());
     println!("line                       code  times  clocks");
+    let mut clocks_sum = 0;
     for i in 0..4000 {
         let (times, clocks) = counter[i];
         if times > 0 {
             let address = i;
             let line = table.get(&address).unwrap();
+            if 10 <= line + 1 && line + 1 <= 24 {
+                clocks_sum += clocks;
+            }
+            if line + 1 == 19 {
+                assert_eq!(9538, times);
+            }
             println!(
                 "{:4}, {:>25}, {:5}, {:6}",
                 line + 1,
@@ -102,6 +109,8 @@ fn main() {
             );
         }
     }
+    // load命令をentで書き直しているので -2 の補正
+    assert_eq!(182144 - 2, clocks_sum);
 }
 
 fn split_by_line(code: String) -> HashMap<usize, String> {
