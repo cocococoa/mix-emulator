@@ -1,10 +1,12 @@
 use crate::mix_byte::Byte;
 
+pub type Register = WordImpl;
+pub type Memory = Vec<WordImpl>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Sign {
     Positive,
     Negative,
-    NoSuchField,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -31,7 +33,7 @@ impl WordImpl {
         }
 
         match self.sign {
-            Sign::Positive | Sign::NoSuchField => sum,
+            Sign::Positive => sum,
             Sign::Negative => -sum,
         }
     }
@@ -51,6 +53,12 @@ impl WordImpl {
         }
 
         ret
+    }
+    pub fn from_seq(s: Sign, v: &Vec<u32>) -> Self {
+        WordImpl {
+            sign: s,
+            bytes: v.iter().map(|byte| Byte::new(*byte)).collect::<Vec<_>>(),
+        }
     }
     pub fn sign(&self) -> &Sign {
         &self.sign
@@ -80,7 +88,7 @@ impl WordImpl {
                 l += 1;
                 self.sign
             } else {
-                Sign::NoSuchField
+                Sign::Positive
             };
             let mut bytes: Vec<Byte> = vec![];
             for x in l..=r {
@@ -115,15 +123,22 @@ impl WordImpl {
         }
     }
     pub fn rotate_left(&mut self, n: usize) {
-        self.bytes.rotate_left(n)
+        let len = self.len();
+        self.bytes.rotate_left(n % len)
     }
     pub fn rotate_right(&mut self, n: usize) {
-        self.bytes.rotate_right(n)
+        let len = self.len();
+        self.bytes.rotate_right(n % len)
     }
 
     // 以下は余計な気がする
     pub fn pair(l: usize, r: usize) -> usize {
         l * 8 + r
+    }
+    pub fn unpair(fspec: usize) -> (usize, usize) {
+        let l = fspec / 8;
+        let r = fspec % 8;
+        (l, r)
     }
     pub fn address(&self) -> i64 {
         self.subword(WordImpl::pair(0, 2)).unwrap().val()
@@ -144,7 +159,6 @@ impl std::fmt::Display for WordImpl {
         let s = match self.sign {
             Sign::Positive => "+",
             Sign::Negative => "-",
-            Sign::NoSuchField => "",
         };
         let b = self
             .bytes

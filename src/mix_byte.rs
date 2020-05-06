@@ -38,6 +38,10 @@ impl Byte {
             Ok(())
         }
     }
+    pub fn word_max() -> i64 {
+        let byte_max = Byte::max() as i64;
+        byte_max.pow(5)
+    }
 }
 
 impl std::fmt::Display for Byte {
@@ -59,13 +63,5 @@ mod tests {
         assert_eq!(63, b.val());
         assert!(b.inc());
         assert_eq!(Byte::new(0), b);
-
-        assert_eq!(64, Byte::max());
-        assert_eq!(Err(()), Byte::set_max(1000));
-        assert_eq!(Ok(()), Byte::set_max(100));
-        assert_eq!(100, Byte::max());
-        *b.val_mut() = 99;
-        assert!(b.inc());
-        assert_eq!(Ok(()), Byte::set_max(64));
     }
 }
