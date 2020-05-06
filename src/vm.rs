@@ -86,19 +86,6 @@ impl MixVM {
             a + &self.reg_i[(i - 1) as usize].val()
         }; // modified address
 
-        // println!(
-        //     "[Debug] pc: {}, inst: {}, A: {}, I: {}, F: {}, C: {}, M: {}",
-        //     current_pc, inst, a, i, f, c, m
-        // );
-        // println!(
-        //     "\trA: {}\n\trX: {}\n\trI1: {}\n\trI2: {}\n\trI3: {}",
-        //     self.reg_a, self.reg_x, self.reg_i[0], self.reg_i[1], self.reg_i[2]
-        // );
-        // println!(
-        //     "\trI4: {}\n\trI5: {}\n\trI6: {}\n\trJ: {}",
-        //     self.reg_i[3], self.reg_i[4], self.reg_i[5], self.reg_j
-        // );
-
         // 2. define macros
         macro_rules! forward {
             ($pc: expr, $clock: expr) => {

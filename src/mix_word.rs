@@ -50,22 +50,6 @@ impl std::fmt::Display for Byte {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_byte() {
-        let mut b: Byte = Default::default();
-        assert_eq!(Byte::new(0), b);
-        assert_eq!(0, b.val());
-        *b.val_mut() = 63;
-        assert_eq!(63, b.val());
-        assert!(b.inc());
-        assert_eq!(Byte::new(0), b);
-    }
-}
-
 pub type Register = WordImpl;
 pub type Memory = Vec<WordImpl>;
 
@@ -238,6 +222,17 @@ impl std::fmt::Display for WordImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_byte() {
+        let mut b: Byte = Default::default();
+        assert_eq!(Byte::new(0), b);
+        assert_eq!(0, b.val());
+        *b.val_mut() = 63;
+        assert_eq!(63, b.val());
+        assert!(b.inc());
+        assert_eq!(Byte::new(0), b);
+    }
 
     #[test]
     fn test_word() {
