@@ -1,2 +1,3 @@
 # mix-emulator
-Emulator of MIX written by Rust
+
+Emulator of MIX written in Rust
