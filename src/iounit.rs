@@ -124,17 +124,4 @@ impl LinePrinter {
     pub fn next_page(&mut self) {
         self.page.push(self.pos);
     }
-    pub fn print_nicely(&self) -> String {
-        let mut ret = "".to_string();
-        for (line, x) in self.data.iter().enumerate() {
-            for i in 0..5 {
-                let num = x.byte(i).unwrap().val();
-                ret.push(num_to_char(num as usize));
-            }
-            if self.page.contains(&line) {
-                ret.push('\n');
-            }
-        }
-        ret
-    }
 }

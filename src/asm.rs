@@ -1,6 +1,5 @@
 use crate::common::{instruction_data, Instruction, CHAR_TABLE};
-use crate::mix_byte::Byte;
-use crate::mix_word::{Sign, WordImpl};
+use crate::mix_word::{Byte, Sign, WordImpl};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -264,9 +263,6 @@ fn resolve_symbol(
             }
         }
     }
-    // for (line, loc, content) in &code {
-    //     println!("line: {}, loc: {:?}, content: {:?}", line, loc, content);
-    // }
 
     // 2. construct symbol table
     let mut symbols = SymbolTable {
@@ -305,14 +301,8 @@ fn resolve_symbol(
             _ => {}
         }
     }
-    // for (line, address, content) in &code_with_address {
-    //     println!(
-    //         "line: {:2}, address: {:4?}, content: {:?}",
-    //         line, address, content
-    //     );
-    // }
+
     let entry_point = symbols.table.get("START").unwrap()[0].1;
-    // println!("Entry Point{}\nSYMBOL: {:?}", entry_point, symbols);
 
     // 3. resolve address
     for (line, address, content) in &mut code_with_address {
@@ -330,12 +320,6 @@ fn resolve_symbol(
             _ => {}
         }
     }
-    // for (line, address, content) in &code_with_address {
-    //     println!(
-    //         "line: {:2}, address: {:4?}, content: {:?}",
-    //         line, address, content
-    //     );
-    // }
 
     (entry_point, code_with_address)
 }
@@ -418,12 +402,6 @@ fn encode_to_binary(
             }
         }
     }
-    // for (line, address, word) in &ret {
-    //     println!(
-    //         "[binary] line: {:2}, address: {:4}, word: {}",
-    //         line, address, word
-    //     );
-    // }
 
     (entry_point, ret)
 }

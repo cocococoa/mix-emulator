@@ -1,5 +1,4 @@
-use crate::mix_byte::Byte;
-use crate::mix_word::{Memory, Register, Sign};
+use crate::mix_word::{Byte, Memory, Register, Sign};
 use std::cmp::Ordering;
 
 // ロード命令
