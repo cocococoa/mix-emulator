@@ -1,6 +1,5 @@
 use crate::common::{instruction_data, Instruction, CHAR_TABLE};
-use crate::mix_byte::Byte;
-use crate::mix_word::{Sign, WordImpl};
+use crate::mix_word::{Byte, Sign, WordImpl};
 use std::collections::HashMap;
 use std::str::FromStr;
 
