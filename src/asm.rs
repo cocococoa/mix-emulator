@@ -64,6 +64,9 @@ fn set_attribute(code: Vec<(usize, String)>) -> Vec<(usize, Attribute, String)> 
     let mut ret = vec![];
 
     for (l, content) in code {
+        if content.starts_with("*") {
+            continue;
+        }
         match operation(&content) {
             Some(v) => {
                 ret.push((l, Attribute::Instruction(v), content));
@@ -73,9 +76,7 @@ fn set_attribute(code: Vec<(usize, String)>) -> Vec<(usize, Attribute, String)> 
                     ret.push((l, Attribute::Support(v), content));
                 }
                 None => {
-                    if !content.starts_with("*") {
-                        println!("comment should be started with *.\n{:?}\n^^^", content);
-                    }
+                    panic!();
                 }
             },
         }
@@ -162,6 +163,7 @@ fn parse_content(code: Vec<(usize, Attribute, String)>) -> Vec<(usize, Option<St
     let mut ret = vec![];
 
     for (line, attribute, content) in code {
+        println!("l: {:2}, attr: {:?}, cont: {}", line, attribute, content);
         match attribute {
             Attribute::Instruction(v) => ret.push((
                 line,
