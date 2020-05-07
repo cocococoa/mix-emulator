@@ -434,6 +434,138 @@ impl SymbolTable {
     }
 }
 
+fn format_finite_length(s: &str, len: usize) -> String {
+    " ".repeat(len - s.len()).to_string() + s
+}
+
+pub fn format_code(code: String) -> String {
+    use std::cmp::max;
+    let tokenized_code = tokenize(set_attribute(split_by_line(code)));
+    let mut loc_len = 0usize;
+    let mut a_len = 0usize;
+    let mut i_len = 0usize;
+    let mut f_len = 0usize;
+    for (_line, loc, content) in &tokenized_code {
+        if loc.is_some() {
+            loc_len = max(loc_len, loc.as_ref().unwrap().len());
+        }
+        match content {
+            Content::Instruction(_inst, a, i, f) => {
+                if a.is_some() {
+                    a_len = max(a_len, a.as_ref().unwrap().len())
+                }
+                if i.is_some() {
+                    i_len = max(i_len, i.as_ref().unwrap().len())
+                }
+                if f.is_some() {
+                    f_len = max(f_len, f.as_ref().unwrap().len())
+                }
+            }
+            Content::PseudoInstruction(_inst, a, f) => {
+                if a.is_some() {
+                    a_len = max(a_len, a.as_ref().unwrap().len())
+                }
+                if f.is_some() {
+                    f_len = max(f_len, f.as_ref().unwrap().len())
+                }
+            }
+        }
+    }
+
+    // 遊びを持たせる
+    loc_len += 3;
+    a_len += 3;
+    i_len += 3;
+    f_len += 3;
+
+    let mut ret = "".to_string();
+
+    ret.push_str(" | ");
+    ret.push_str("LINE");
+    ret.push_str(" | ");
+    ret.push_str(&format_finite_length("LOC", loc_len));
+    ret.push_str(" | ");
+    ret.push_str("   OPE");
+    ret.push_str(" | ");
+    ret.push_str(&format_finite_length("A", a_len));
+    ret.push_str(" | ");
+    ret.push_str(&format_finite_length("I", i_len));
+    ret.push_str(" | ");
+    ret.push_str(&format_finite_length("F", f_len));
+    ret.push_str(" | ");
+    ret.push('\n');
+    for (line, loc, content) in tokenized_code {
+        let li = format!("{:4}", line);
+        let lo = if loc.is_some() {
+            format_finite_length(&loc.unwrap(), loc_len)
+        } else {
+            " ".repeat(loc_len).to_string()
+        };
+        let op = match &content {
+            Content::Instruction(inst, _a, _i, _f) => format_finite_length(&inst.to_string(), 6),
+            Content::PseudoInstruction(inst, _a, _f) => format_finite_length(&inst.to_string(), 6),
+        };
+        let a = match &content {
+            Content::Instruction(_inst, a, _i, _f) => {
+                if a.is_some() {
+                    format_finite_length(a.as_ref().unwrap(), a_len)
+                } else {
+                    " ".repeat(a_len).to_string()
+                }
+            }
+            Content::PseudoInstruction(_inst, a, _f) => {
+                if a.is_some() {
+                    format_finite_length(a.as_ref().unwrap(), a_len)
+                } else {
+                    " ".repeat(a_len).to_string()
+                }
+            }
+        };
+        let i = match &content {
+            Content::Instruction(_inst, _a, i, _f) => {
+                if i.is_some() {
+                    format_finite_length(i.as_ref().unwrap(), i_len)
+                } else {
+                    " ".repeat(i_len).to_string()
+                }
+            }
+            Content::PseudoInstruction(_inst, _a, _f) => " ".repeat(i_len).to_string(),
+        };
+        let f = match content {
+            Content::Instruction(_inst, _a, _i, f) => {
+                if f.is_some() {
+                    format_finite_length(f.as_ref().unwrap(), f_len)
+                } else {
+                    " ".repeat(f_len).to_string()
+                }
+            }
+            Content::PseudoInstruction(_inst, _a, f) => {
+                if f.is_some() {
+                    format_finite_length(f.as_ref().unwrap(), f_len)
+                } else {
+                    " ".repeat(f_len).to_string()
+                }
+            }
+        };
+        ret.push_str(" | ");
+        ret.push_str(&li);
+        ret.push_str(" | ");
+        ret.push_str(&lo);
+        ret.push_str(" | ");
+        ret.push_str(&op);
+        ret.push_str(" | ");
+        ret.push_str(&a);
+        ret.push_str(" | ");
+        ret.push_str(&i);
+        ret.push_str(" | ");
+        ret.push_str(&f);
+        ret.push_str(" | ");
+        ret.push('\n');
+    }
+
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,6 +627,8 @@ mod tests {
         let _tmp = encode_to_binary(resolve_symbol(tokenize(set_attribute(split_by_line(
             code.to_string(),
         )))));
+        let tmp = format_code(code.to_string());
+        println!("\n{}", tmp);
     }
     #[test]
     fn test_max() {
@@ -514,5 +648,7 @@ mod tests {
         let _tmp = encode_to_binary(resolve_symbol(tokenize(set_attribute(split_by_line(
             code.to_string(),
         )))));
+        let tmp = format_code(code.to_string());
+        println!("\n{}", tmp);
     }
 }
