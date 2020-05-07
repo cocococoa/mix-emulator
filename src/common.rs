@@ -6,7 +6,31 @@ pub const CHAR_TABLE: [char; 56] = [
     '8', '9', '.', ',', '(', ')', '+', '-', '*', '/', '=', '$', '<', '>', '@', ';', ':', '\'',
 ];
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum PseudoInstruction {
+    EQU,
+    ORIG,
+    CON,
+    ALF,
+    END,
+}
+
+impl FromStr for PseudoInstruction {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use PseudoInstruction::*;
+        match s {
+            "EQU" => Ok(EQU),
+            "ORIG" => Ok(ORIG),
+            "CON" => Ok(CON),
+            "ALF" => Ok(ALF),
+            "END" => Ok(END),
+            _ => Err(format!("{} is not PseudoInstruction", s)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
     NOP,
     ADD,
