@@ -3,38 +3,45 @@ use crate::mix_word::{Byte, Sign, WordImpl};
 use std::collections::HashMap;
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Attribute {
     Instruction(Instruction),
     PseudoInstruction(PseudoInstruction),
+    Comment,
 }
+
 #[derive(Debug)]
-enum Content {
-    Instruction(Instruction, Option<String>, Option<String>, Option<String>),
-    PseudoInstruction(PseudoInstruction, Option<String>, Option<String>),
+struct Content {
+    attr: Attribute,
+    loc: Option<String>,
+    addr: Option<String>,
+    index: Option<String>,
+    modification: Option<String>,
 }
 
 fn to_instruction(s: &str) -> Option<Instruction> {
-    for slice in s.split_whitespace() {
-        match Instruction::from_str(slice) {
-            Ok(v) => {
-                return Some(v);
-            }
-            Err(_) => {}
-        }
+    match Instruction::from_str(s) {
+        Ok(v) => Some(v),
+        Err(_) => None,
     }
-    None
 }
 fn to_pseudo_instruction(s: &str) -> Option<PseudoInstruction> {
-    for slice in s.split_whitespace() {
-        match PseudoInstruction::from_str(slice) {
-            Ok(v) => {
-                return Some(v);
-            }
-            Err(_) => {}
-        }
+    match PseudoInstruction::from_str(s) {
+        Ok(v) => Some(v),
+        Err(_) => None,
     }
-    None
+}
+fn get_attribute(s: &str) -> Option<Attribute> {
+    let a = to_instruction(s);
+    let b = to_pseudo_instruction(s);
+
+    if a.is_some() {
+        Some(Attribute::Instruction(a.unwrap()))
+    } else if b.is_some() {
+        Some(Attribute::PseudoInstruction(b.unwrap()))
+    } else {
+        None
+    }
 }
 
 fn split_by_line(code: String) -> Vec<(usize, String)> {
@@ -46,135 +53,103 @@ fn split_by_line(code: String) -> Vec<(usize, String)> {
 
     ret
 }
-fn set_attribute(code: Vec<(usize, String)>) -> Vec<(usize, Attribute, String)> {
+fn tokenize(code: Vec<(usize, String)>) -> Vec<(usize, Content)> {
     let mut ret = vec![];
 
-    for (l, content) in code {
-        // if this line is comment, continue
-        if content.starts_with("*") {
+    for (line, code) in code {
+        if code.starts_with("*") {
+            ret.push((
+                line,
+                Content {
+                    attr: Attribute::Comment,
+                    loc: None,
+                    addr: Some(code),
+                    index: None,
+                    modification: None,
+                },
+            ));
             continue;
         }
-        match (to_instruction(&content), to_pseudo_instruction(&content)) {
-            (Some(_), Some(_)) => {
-                panic!();
+        let mut iter = code.split_whitespace().peekable();
+        let first_term = iter.next().unwrap();
+        let first_term_attribute = get_attribute(first_term);
+        let (loc, attr) = if first_term_attribute.is_none() {
+            // first term is loc
+            let second_term = iter.next().unwrap();
+            (
+                Some(first_term.to_string()),
+                get_attribute(second_term).unwrap(),
+            )
+        } else {
+            (None, first_term_attribute.unwrap())
+        };
+
+        // rest == addr + index + modification
+        let rest = iter.collect::<String>();
+        let (rest, modification) = match rest.find("(") {
+            Some(begin) => {
+                let end = rest.find(")").unwrap();
+                (
+                    rest.get(..begin).unwrap().to_string(),
+                    Some(rest.get((begin + 1)..end).unwrap().trim().to_string()),
+                )
             }
-            (Some(v), None) => {
-                ret.push((l, Attribute::Instruction(v), content));
-            }
-            (None, Some(v)) => {
-                ret.push((l, Attribute::PseudoInstruction(v), content));
-            }
-            (None, None) => {
-                panic!();
-            }
-        }
+            None => (rest, None),
+        };
+        let (rest, index) = match rest.find(",") {
+            Some(begin) => (
+                rest.get(..begin).unwrap().to_string(),
+                Some(rest.get((begin + 1)..).unwrap().trim().to_string()),
+            ),
+            None => (rest, None),
+        };
+        let addr = if rest.trim().len() != 0 {
+            Some(rest.trim().to_string())
+        } else {
+            None
+        };
+
+        ret.push((
+            line,
+            Content {
+                attr: attr,
+                loc: loc,
+                addr: addr,
+                index: index,
+                modification: modification,
+            },
+        ))
     }
 
     ret
 }
-fn get_addr(s: &str) -> Option<String> {
-    let mut iter = s.split_whitespace().peekable();
+fn resolve_symbol(mut code: Vec<(usize, Content)>) -> (usize, Vec<(usize, usize, Content)>) {
+    use PseudoInstruction::*;
 
-    while iter.peek().is_some() {
-        let slice = iter.next().unwrap();
-        if Instruction::from_str(slice).is_ok() || PseudoInstruction::from_str(slice).is_ok() {
-            // slice is instruction
-            break;
-        }
-    }
-    match iter.next() {
-        None => None,
-        Some(address) => Some(
-            address
-                .split(|c| c == '(' || c == ',')
-                .collect::<Vec<&str>>()[0]
-                .to_string(),
-        ),
-    }
-}
-fn get_index(s: &str) -> Option<String> {
-    match s.find(",") {
-        Some(mid) => Some(
-            s.split_at(mid + 1).1.split("(").collect::<Vec<&str>>()[0]
-                .trim()
-                .to_string(),
-        ),
-        None => None,
-    }
-}
-fn get_modification(s: &str) -> Option<String> {
-    match s.find("(") {
-        Some(mid) => Some(
-            s.split_at(mid + 1).1.split(")").collect::<Vec<&str>>()[0]
-                .trim()
-                .to_string(),
-        ),
-        None => None,
-    }
-}
-fn get_loc1(s: &str) -> Option<String> {
-    let mut iter = s.split_whitespace();
-    let head = iter.next().unwrap();
-    match Instruction::from_str(head) {
-        Ok(_) => None,
-        Err(_) => Some(head.to_string()),
-    }
-}
-fn get_loc2(s: &str) -> Option<String> {
-    let mut iter = s.split_whitespace();
-    let head = iter.next().unwrap();
-    match PseudoInstruction::from_str(head) {
-        Ok(_) => None,
-        Err(_) => Some(head.to_string()),
-    }
-}
-fn tokenize(code: Vec<(usize, Attribute, String)>) -> Vec<(usize, Option<String>, Content)> {
-    let mut ret = vec![];
-
-    for (line, attribute, content) in code {
-        match attribute {
-            Attribute::Instruction(v) => ret.push((
-                line,
-                get_loc1(&content),
-                Content::Instruction(
-                    v,
-                    get_addr(&content),
-                    get_index(&content),
-                    get_modification(&content),
-                ),
-            )),
-            Attribute::PseudoInstruction(PseudoInstruction::ALF) => ret.push((
-                line,
-                get_loc2(&content),
-                Content::PseudoInstruction(PseudoInstruction::ALF, get_addr(&content), None),
-            )),
-            Attribute::PseudoInstruction(v) => ret.push((
-                line,
-                get_loc2(&content),
-                Content::PseudoInstruction(v, get_addr(&content), get_modification(&content)),
-            )),
-        }
-    }
-
-    ret
-}
-fn resolve_symbol(
-    mut code: Vec<(usize, Option<String>, Content)>,
-) -> (usize, Vec<(usize, usize, Content)>) {
     // 1. resolve EQU
     // TODO: valueに式があれば解決する。
     let mut symbols = HashMap::new();
-    for (_, loc, content) in &mut code {
-        match content {
-            Content::PseudoInstruction(PseudoInstruction::EQU, addr, _f) => {
+    for (
+        _line,
+        Content {
+            attr,
+            loc,
+            addr,
+            index,
+            modification,
+        },
+    ) in &mut code
+    {
+        match attr {
+            Attribute::PseudoInstruction(EQU) => {
                 // EQUなのでsymbolsに突っ込む
                 let variable = loc.as_ref().unwrap().clone().trim().to_string();
                 let value = addr.clone().unwrap().trim().to_string();
                 symbols.insert(variable, value);
             }
-            Content::PseudoInstruction(PseudoInstruction::ORIG, addr, _f)
-            | Content::PseudoInstruction(PseudoInstruction::CON, addr, _f)
-            | Content::PseudoInstruction(PseudoInstruction::END, addr, _f) => {
+            Attribute::PseudoInstruction(ORIG)
+            | Attribute::PseudoInstruction(CON)
+            | Attribute::PseudoInstruction(END) => {
                 if addr.is_some() {
                     let tmp_s = addr.clone().unwrap();
                     match symbols.get(&tmp_s) {
@@ -185,7 +160,7 @@ fn resolve_symbol(
                     }
                 }
             }
-            Content::Instruction(_, addr, index, loc) => {
+            Attribute::Instruction(_) => {
                 if addr.is_some() {
                     let tmp_s = addr.clone().unwrap();
                     match symbols.get(&tmp_s) {
@@ -213,9 +188,18 @@ fn resolve_symbol(
                         None => {}
                     }
                 }
+                if modification.is_some() {
+                    let tmp_s = modification.clone().unwrap();
+                    match symbols.get(&tmp_s) {
+                        Some(value) => {
+                            *modification = Some(value.to_string());
+                        }
+                        None => {}
+                    }
+                }
             }
             _ => {
-                //pass
+                // comment or ALF
             }
         }
     }
@@ -227,56 +211,36 @@ fn resolve_symbol(
     let mut code_with_address = vec![];
     let mut address = 0usize;
     let mut entry_point = 0usize;
-    for (line, loc, content) in code {
-        if loc.is_some() {
-            symbols.push(loc.unwrap(), line, address);
+    for (line, content) in code {
+        if content.loc.is_some() {
+            symbols.push(content.loc.as_ref().unwrap().clone(), line, address);
         }
-        match content {
-            Content::PseudoInstruction(PseudoInstruction::ORIG, addr, _f) => {
-                address = addr.unwrap().parse::<usize>().unwrap();
+        match content.attr {
+            Attribute::PseudoInstruction(ORIG) => {
+                address = content.addr.unwrap().parse::<usize>().unwrap();
             }
-            Content::PseudoInstruction(PseudoInstruction::CON, addr, f) => {
-                code_with_address.push((
-                    line,
-                    address,
-                    Content::PseudoInstruction(PseudoInstruction::CON, addr, f),
-                ));
+            Attribute::PseudoInstruction(END) => {
+                entry_point = symbols.table.get(&content.addr.unwrap()).unwrap()[0].1;
+            }
+            Attribute::PseudoInstruction(EQU) => {
+                // do nothing
+            }
+            Attribute::Comment => {}
+            _ => {
+                code_with_address.push((line, address, content));
                 address += 1;
             }
-            Content::PseudoInstruction(PseudoInstruction::ALF, addr, f) => {
-                code_with_address.push((
-                    line,
-                    address,
-                    Content::PseudoInstruction(PseudoInstruction::ALF, addr, f),
-                ));
-                address += 1;
-            }
-            Content::PseudoInstruction(PseudoInstruction::END, addr, _f) => {
-                entry_point = symbols.table.get(&addr.unwrap()).unwrap()[0].1;
-            }
-            // inst
-            Content::Instruction(v, addr, index, modification) => {
-                code_with_address.push((
-                    line,
-                    address,
-                    Content::Instruction(v, addr, index, modification),
-                ));
-                address += 1;
-            }
-            _ => {}
         }
     }
 
-    // let entry_point = symbols.table.get("START").unwrap()[0].1;
-    let entry_point = entry_point;
-
     // 3. resolve address
     for (line, address, content) in &mut code_with_address {
-        match content {
-            Content::Instruction(_, addr, _, _) => {
-                if addr.is_some() && addr.as_ref().unwrap().parse::<i64>().is_err() {
-                    let res = symbols.resolve(addr.as_ref().unwrap(), *line, *address);
-                    *addr = if res.is_some() {
+        match content.attr {
+            Attribute::Instruction(_) => {
+                if content.addr.is_some() && content.addr.as_ref().unwrap().parse::<i64>().is_err()
+                {
+                    let res = symbols.resolve(content.addr.as_ref().unwrap(), *line, *address);
+                    content.addr = if res.is_some() {
                         Some(res.unwrap().to_string())
                     } else {
                         panic!()
@@ -306,24 +270,35 @@ fn encode_to_binary(
 
     let mut ret = vec![];
 
-    for (line, address, content) in code {
-        match content {
-            Content::PseudoInstruction(v, addr, _f) => {
-                if v == PseudoInstruction::CON {
+    for (
+        line,
+        address,
+        Content {
+            attr,
+            loc: _,
+            addr,
+            index,
+            modification,
+        },
+    ) in code
+    {
+        match attr {
+            Attribute::PseudoInstruction(pinst) => {
+                if pinst == PseudoInstruction::CON {
                     let x = addr.unwrap().parse::<i64>().unwrap();
                     ret.push((line, address, WordImpl::from_val(x)));
-                } else if v == PseudoInstruction::ALF {
+                } else if pinst == PseudoInstruction::ALF {
                     let mut v = vec![];
                     for c in addr.unwrap().replace("_", " ").chars() {
                         v.push(char_to_num(c).unwrap() as u32);
                     }
                     ret.push((line, address, WordImpl::from_seq(Sign::Positive, &v)));
                 } else {
-                    panic!()
+                    unreachable!();
                 }
             }
-            Content::Instruction(v, addr, index, modification) => {
-                let (mut a, mut i, mut f, c) = instruction_data(&v);
+            Attribute::Instruction(inst) => {
+                let (mut a, mut i, mut f, c) = instruction_data(&inst);
                 if addr.is_some() {
                     a = addr.unwrap().parse::<i64>().unwrap();
                 }
@@ -341,7 +316,6 @@ fn encode_to_binary(
                         }
                         None => modification.parse::<i64>().unwrap(),
                     }
-                    // f = modification.unwrap().parse::<i64>().unwrap();
                 }
                 let sign = if a < 0 {
                     a = a.abs();
@@ -365,6 +339,9 @@ fn encode_to_binary(
                     ),
                 ))
             }
+            _ => {
+                unreachable!();
+            }
         }
     }
 
@@ -372,7 +349,7 @@ fn encode_to_binary(
 }
 
 pub fn assemble(code: String) -> (usize, Vec<(usize, usize, WordImpl)>) {
-    encode_to_binary(resolve_symbol(tokenize(set_attribute(split_by_line(code)))))
+    encode_to_binary(resolve_symbol(tokenize(split_by_line(code))))
 }
 
 #[derive(Debug)]
@@ -440,34 +417,34 @@ fn format_finite_length(s: &str, len: usize) -> String {
 
 pub fn format_code(code: String) -> String {
     use std::cmp::max;
-    let tokenized_code = tokenize(set_attribute(split_by_line(code)));
+    let tokenized_code = tokenize(split_by_line(code));
     let mut loc_len = 0usize;
     let mut a_len = 0usize;
     let mut i_len = 0usize;
     let mut f_len = 0usize;
-    for (_line, loc, content) in &tokenized_code {
-        if loc.is_some() {
-            loc_len = max(loc_len, loc.as_ref().unwrap().len());
-        }
-        match content {
-            Content::Instruction(_inst, a, i, f) => {
-                if a.is_some() {
-                    a_len = max(a_len, a.as_ref().unwrap().len())
-                }
-                if i.is_some() {
-                    i_len = max(i_len, i.as_ref().unwrap().len())
-                }
-                if f.is_some() {
-                    f_len = max(f_len, f.as_ref().unwrap().len())
-                }
+    for (
+        _line,
+        Content {
+            attr,
+            loc,
+            addr,
+            index,
+            modification,
+        },
+    ) in &tokenized_code
+    {
+        if attr != &Attribute::Comment {
+            if loc.is_some() {
+                loc_len = max(loc_len, loc.as_ref().unwrap().len());
             }
-            Content::PseudoInstruction(_inst, a, f) => {
-                if a.is_some() {
-                    a_len = max(a_len, a.as_ref().unwrap().len())
-                }
-                if f.is_some() {
-                    f_len = max(f_len, f.as_ref().unwrap().len())
-                }
+            if addr.is_some() {
+                a_len = max(a_len, addr.as_ref().unwrap().len())
+            }
+            if index.is_some() {
+                i_len = max(i_len, index.as_ref().unwrap().len())
+            }
+            if modification.is_some() {
+                f_len = max(f_len, modification.as_ref().unwrap().len())
             }
         }
     }
@@ -494,73 +471,62 @@ pub fn format_code(code: String) -> String {
     ret.push_str(&format_finite_length("F", f_len));
     ret.push_str(" | ");
     ret.push('\n');
-    for (line, loc, content) in tokenized_code {
+    for (
+        line,
+        Content {
+            attr,
+            loc,
+            addr,
+            index,
+            modification,
+        },
+    ) in tokenized_code
+    {
         let li = format!("{:4}", line);
-        let lo = if loc.is_some() {
-            format_finite_length(&loc.unwrap(), loc_len)
-        } else {
-            " ".repeat(loc_len).to_string()
-        };
-        let op = match &content {
-            Content::Instruction(inst, _a, _i, _f) => format_finite_length(&inst.to_string(), 6),
-            Content::PseudoInstruction(inst, _a, _f) => format_finite_length(&inst.to_string(), 6),
-        };
-        let a = match &content {
-            Content::Instruction(_inst, a, _i, _f) => {
-                if a.is_some() {
-                    format_finite_length(a.as_ref().unwrap(), a_len)
-                } else {
-                    " ".repeat(a_len).to_string()
-                }
-            }
-            Content::PseudoInstruction(_inst, a, _f) => {
-                if a.is_some() {
-                    format_finite_length(a.as_ref().unwrap(), a_len)
-                } else {
-                    " ".repeat(a_len).to_string()
-                }
-            }
-        };
-        let i = match &content {
-            Content::Instruction(_inst, _a, i, _f) => {
-                if i.is_some() {
-                    format_finite_length(i.as_ref().unwrap(), i_len)
-                } else {
-                    " ".repeat(i_len).to_string()
-                }
-            }
-            Content::PseudoInstruction(_inst, _a, _f) => " ".repeat(i_len).to_string(),
-        };
-        let f = match content {
-            Content::Instruction(_inst, _a, _i, f) => {
-                if f.is_some() {
-                    format_finite_length(f.as_ref().unwrap(), f_len)
-                } else {
-                    " ".repeat(f_len).to_string()
-                }
-            }
-            Content::PseudoInstruction(_inst, _a, f) => {
-                if f.is_some() {
-                    format_finite_length(f.as_ref().unwrap(), f_len)
-                } else {
-                    " ".repeat(f_len).to_string()
-                }
-            }
-        };
         ret.push_str(" | ");
         ret.push_str(&li);
         ret.push_str(" | ");
-        ret.push_str(&lo);
-        ret.push_str(" | ");
-        ret.push_str(&op);
-        ret.push_str(" | ");
-        ret.push_str(&a);
-        ret.push_str(" | ");
-        ret.push_str(&i);
-        ret.push_str(" | ");
-        ret.push_str(&f);
-        ret.push_str(" | ");
-        ret.push('\n');
+        if attr == Attribute::Comment {
+            ret.push_str(&addr.unwrap());
+            ret.push('\n');
+        } else {
+            let lo = if loc.is_some() {
+                format_finite_length(&loc.unwrap(), loc_len)
+            } else {
+                " ".repeat(loc_len).to_string()
+            };
+            let op = match attr {
+                Attribute::Instruction(inst) => format_finite_length(&inst.to_string(), 6),
+                Attribute::PseudoInstruction(pinst) => format_finite_length(&pinst.to_string(), 6),
+                _ => "".to_string(),
+            };
+            let a = if addr.is_some() {
+                format_finite_length(addr.as_ref().unwrap(), a_len)
+            } else {
+                " ".repeat(a_len).to_string()
+            };
+            let i = if index.is_some() {
+                format_finite_length(index.as_ref().unwrap(), i_len)
+            } else {
+                " ".repeat(i_len).to_string()
+            };
+            let f = if modification.is_some() {
+                format_finite_length(modification.as_ref().unwrap(), f_len)
+            } else {
+                " ".repeat(f_len).to_string()
+            };
+            ret.push_str(&lo);
+            ret.push_str(" | ");
+            ret.push_str(&op);
+            ret.push_str(" | ");
+            ret.push_str(&a);
+            ret.push_str(" | ");
+            ret.push_str(&i);
+            ret.push_str(" | ");
+            ret.push_str(&f);
+            ret.push_str(" | ");
+            ret.push('\n');
+        }
     }
 
     ret
@@ -624,9 +590,7 @@ mod tests {
                     ORIG 2049
                     CON 2010
                     END START";
-        let _tmp = encode_to_binary(resolve_symbol(tokenize(set_attribute(split_by_line(
-            code.to_string(),
-        )))));
+        let _tmp = encode_to_binary(resolve_symbol(tokenize(split_by_line(code.to_string()))));
         let tmp = format_code(code.to_string());
         println!("\n{}", tmp);
     }
@@ -645,9 +609,7 @@ mod tests {
                     J3P LOOP
                     EXIT JMP *
                     END START";
-        let _tmp = encode_to_binary(resolve_symbol(tokenize(set_attribute(split_by_line(
-            code.to_string(),
-        )))));
+        let _tmp = encode_to_binary(resolve_symbol(tokenize(split_by_line(code.to_string()))));
         let tmp = format_code(code.to_string());
         println!("\n{}", tmp);
     }
