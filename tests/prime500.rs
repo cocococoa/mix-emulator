@@ -4,58 +4,59 @@ use std::collections::HashMap;
 
 #[test]
 fn test_prime500() {
-    let code = "* example program
-                    * 
-                    L EQU 500
-                    PRINTER EQU 18
-                    PRIME EQU -1
-                    BUFO EQU 2000
-                    BUF1 EQU 2025
-                    ORIG 3000
-                    START IOC 0(PRINTER)
-                    ENT1 -499
-                    ENT2 3
-                    2H INC1 1
-                    ST2 499,1
-                    J1Z 2F
-                    4H INC2 2
-                    ENT3 2
-                    6H ENTA 0
-                    ENTX 0,2
-                    DIV PRIME,3
-                    JXZ 4B
-                    CMPA PRIME,3
-                    INC3 1
-                    JG 6B
-                    JMP 2B
-                    2H OUT TITLE(PRINTER)
-                    ENT4 2020
-                    ENT5 -25
-                    2H INC5 501
-                    4H LDA PRIME,5
-                    CHAR
-                    STX 0,4(1:4)
-                    DEC4 1
-                    DEC5 25
-                    J5P 4B
-                    OUT 0,4(PRINTER)
-                    LD4 24,4
-                    J5N 2B
-                    HLT
-                    * initial contents of ...
-                    ORIG 0
-                    CON 2
-                    ORIG 1995
-                    TITLE ALF FISRT
-                    ALF _FIVE
-                    ALF _HUND
-                    ALF RED_P
-                    ALF RIMES
-                    ORIG 2024
-                    CON 2045
-                    ORIG 2049
-                    CON 2020
-                    END START";
+    let code = "* EXAMPLE PROGRAM ... TABLE OF PRIMES
+                * 
+                L EQU 500
+                PRINTER EQU 18
+                PRIME EQU -1
+                BUF0 EQU 2000
+                BUF1 EQU BUF0+25
+                ORIG 3000
+                START IOC 0(PRINTER)
+                ENT1 -499
+                ENT2 3
+                2H INC1 1
+                ST2 PRIME+L,1
+                J1Z 2F
+                4H INC2 2
+                ENT3 2
+                6H ENTA 0
+                ENTX 0,2
+                DIV PRIME,3
+                JXZ 4B
+                CMPA PRIME,3
+                INC3 1
+                JG 6B
+                JMP 2B
+                WIDTH EQU 4
+                2H OUT TITLE(PRINTER)
+                ENT4 2000+WIDTH
+                ENT5 -500/WIDTH
+                2H INC5 L+1
+                4H LDA PRIME,5
+                CHAR
+                STX 0,4(1:4)
+                DEC4 1
+                DEC5 500/WIDTH
+                J5P 4B
+                OUT 0,4(PRINTER)
+                LD4 24,4
+                J5N 2B
+                HLT
+                * INITIAL CONTENTS OF TABLES AND BUFFERS
+                ORIG PRIME+1
+                CON 2
+                ORIG BUF0-5
+                TITLE ALF FISRT
+                ALF _FIVE
+                ALF _HUND
+                ALF RED_P
+                ALF RIMES
+                ORIG BUF0+24
+                CON BUF1+WIDTH
+                ORIG BUF1+24
+                CON BUF0+WIDTH
+                END START";
     let (entry_point, binary) = assemble(code.to_string());
     let mut v = vec![];
     // addressと行の対応表を作成
