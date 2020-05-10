@@ -13,8 +13,8 @@ fn test_prime500() {
                 BUF1 EQU BUF0+25
                 ORIG 3000
                 START IOC 0(PRINTER)
-                ENT1 -499
-                ENT2 3
+                LD1 =1-L=
+                LD2 =3=
                 2H INC1 1
                 ST2 PRIME+L,1
                 J1Z 2F
@@ -111,8 +111,7 @@ fn test_prime500() {
             );
         }
     }
-    // load命令をentで書き直しているので -2 の補正
-    assert_eq!(182144 - 2, clocks_sum);
+    assert_eq!(182144, clocks_sum);
 }
 
 fn split_by_line(code: String) -> HashMap<usize, String> {

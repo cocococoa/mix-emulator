@@ -3,14 +3,14 @@ use crate::mix_word::{Byte, Sign, WordImpl};
 use std::collections::HashMap;
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Attribute {
     Instruction(Instruction),
     PseudoInstruction(PseudoInstruction),
     Comment,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Content {
     attr: Attribute,
     loc: Option<String>,
@@ -54,8 +54,10 @@ fn split_by_line(code: String) -> Vec<(usize, String)> {
     ret
 }
 fn split_by_field(code: Vec<(usize, String)>) -> Vec<(usize, Content)> {
-    let mut ret = vec![];
+    use PseudoInstruction::*;
 
+    let mut ret = vec![];
+    let mut literal_constants: Vec<(usize, Content)> = vec![];
     for (line, code) in code {
         if code.starts_with("*") {
             ret.push((
@@ -86,39 +88,98 @@ fn split_by_field(code: Vec<(usize, String)>) -> Vec<(usize, Content)> {
 
         // rest == addr + index + modification
         let rest = iter.collect::<String>();
-        let (rest, modification) = match rest.find("(") {
-            Some(begin) => {
-                let end = rest.find(")").unwrap();
-                (
-                    rest.get(..begin).unwrap().to_string(),
-                    Some(rest.get((begin + 1)..end).unwrap().trim().to_string()),
-                )
+        if attr == Attribute::PseudoInstruction(END) {
+            // move literal constants to ret
+            for e in &literal_constants {
+                ret.push(e.clone());
             }
-            None => (rest, None),
-        };
-        let (rest, index) = match rest.find(",") {
-            Some(begin) => (
-                rest.get(..begin).unwrap().to_string(),
-                Some(rest.get((begin + 1)..).unwrap().trim().to_string()),
-            ),
-            None => (rest, None),
-        };
-        let addr = if rest.trim().len() != 0 {
-            Some(rest.trim().to_string())
+        }
+        if attr == Attribute::PseudoInstruction(ALF) {
+            ret.push((
+                line,
+                Content {
+                    attr: attr,
+                    loc: loc,
+                    addr: Some(rest),
+                    index: None,
+                    modification: None,
+                },
+            ))
         } else {
-            None
-        };
-
-        ret.push((
-            line,
-            Content {
-                attr: attr,
-                loc: loc,
-                addr: addr,
-                index: index,
-                modification: modification,
-            },
-        ))
+            if rest.starts_with("=") && rest.ends_with("=") {
+                // "A" part is literal constant
+                let unique_addr = "LC".to_string() + &literal_constants.len().to_string();
+                ret.push((
+                    line,
+                    Content {
+                        attr: attr,
+                        loc: loc,
+                        addr: Some(unique_addr.clone()),
+                        index: None,
+                        modification: None,
+                    },
+                ));
+                let rest = rest.get(1..(rest.len() - 1)).unwrap().to_string();
+                let (rest, modification) = match rest.find("(") {
+                    Some(begin) => {
+                        let end = rest.find(")").unwrap();
+                        (
+                            rest.get(..begin).unwrap().to_string(),
+                            Some(rest.get((begin + 1)..end).unwrap().trim().to_string()),
+                        )
+                    }
+                    None => (rest, None),
+                };
+                let addr = if rest.trim().len() != 0 {
+                    Some(rest.trim().to_string())
+                } else {
+                    None
+                };
+                literal_constants.push((
+                    9999,
+                    Content {
+                        attr: Attribute::PseudoInstruction(CON),
+                        loc: Some(unique_addr),
+                        addr: addr,
+                        index: None,
+                        modification: modification,
+                    },
+                ));
+            } else {
+                let (rest, modification) = match rest.find("(") {
+                    Some(begin) => {
+                        let end = rest.find(")").unwrap();
+                        (
+                            rest.get(..begin).unwrap().to_string(),
+                            Some(rest.get((begin + 1)..end).unwrap().trim().to_string()),
+                        )
+                    }
+                    None => (rest, None),
+                };
+                let (rest, index) = match rest.find(",") {
+                    Some(begin) => (
+                        rest.get(..begin).unwrap().to_string(),
+                        Some(rest.get((begin + 1)..).unwrap().trim().to_string()),
+                    ),
+                    None => (rest, None),
+                };
+                let addr = if rest.trim().len() != 0 {
+                    Some(rest.trim().to_string())
+                } else {
+                    None
+                };
+                ret.push((
+                    line,
+                    Content {
+                        attr: attr,
+                        loc: loc,
+                        addr: addr,
+                        index: index,
+                        modification: modification,
+                    },
+                ))
+            }
+        }
     }
 
     ret
@@ -516,16 +577,7 @@ fn resolve_symbol(code: Vec<(usize, Content)>) -> (usize, Vec<(usize, usize, Exp
             line, content.attr, content.loc, content.addr, content.index, content.modification
         );
         match content.attr {
-            Attribute::Instruction(_) => {
-                // if content.addr.is_some()
-                // {
-                //     let res = symbols.get(&get_symbol(&content.addr.unwrap()).unwrap());
-                //     content.addr = if res.is_some() {
-                //         Some(res.unwrap().to_string())
-                //     } else {
-                //         panic!()
-                //     }
-                // }
+            Attribute::Instruction(_) | Attribute::PseudoInstruction(CON) => {
                 // TODO: implement more
                 if content.addr.is_some() {
                     replace_exp(&mut content.addr.as_mut().unwrap(), &symbols);
@@ -816,8 +868,8 @@ mod tests {
                     BUF1 EQU BUF0+25
                     ORIG 3000
                     START IOC 0(PRINTER)
-                    ENT1 -499
-                    ENT2 3
+                    LD1 =1-L=
+                    LD2 =3=
                     2H INC1 1
                     ST2 PRIME+L,1
                     J1Z 2F

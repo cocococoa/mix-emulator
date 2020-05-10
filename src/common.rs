@@ -7,7 +7,7 @@ pub const CHAR_TABLE: [char; 56] = [
     '8', '9', '.', ',', '(', ')', '+', '-', '*', '/', '=', '$', '<', '>', '@', ';', ':', '\'',
 ];
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PseudoInstruction {
     EQU,
     ORIG,
@@ -44,7 +44,7 @@ impl ToString for PseudoInstruction {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
     NOP,
     ADD,
