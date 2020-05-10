@@ -64,11 +64,23 @@ impl MixVM {
         match f {
             0..=7 => self.tape[f].print(),
             8..=15 => self.disk[f].print(),
-            16 => self.card_punch.print(),
+            16 => self.card_reader.print(),
             17 => self.card_punch.print(),
             18 => self.line_printer.print(),
             19 => self.type_writer_terminal.print(),
             20 => self.paper_tape.print(),
+            _ => unreachable!(),
+        }
+    }
+    pub fn read(&mut self, f: usize, i: Vec<String>) {
+        match f {
+            0..=7 => self.tape[f].set_input(i),
+            8..=15 => self.disk[f].set_input(i),
+            16 => self.card_reader.set_input(i),
+            17 => self.card_punch.set_input(i),
+            18 => self.line_printer.set_input(i),
+            19 => self.type_writer_terminal.set_input(i),
+            20 => self.paper_tape.set_input(i),
             _ => unreachable!(),
         }
     }
@@ -85,6 +97,18 @@ impl MixVM {
         } else {
             a + &self.reg_i[(i - 1) as usize].val()
         }; // modified address
+
+        // println!(
+        //     "line: {}, a: {:4}, i: {:2}, f: {:2}, c: {:2}, m: {:4}",
+        //     current_pc - 2417,
+        //     a,
+        //     i,
+        //     f,
+        //     c,
+        //     m
+        // );
+        // println!("\t rA: {}\n\t rX: {}\n\trI1: {}\n\trI2: {}\n\trI3: {}\n\trI4: {}\n\trI5: {}\n\trI6: {}\n\t rJ: {}", self.reg_a, self.reg_x, self.reg_i[0], self.reg_i[1], self.reg_i[2], self.reg_i[3], self.reg_i[4], self.reg_i[5], self.reg_j);
+        // println!("\toverflow: {}, comp: {:?}", self.overflow, self.comp);
 
         // 2. define macros
         macro_rules! forward {
@@ -290,7 +314,7 @@ impl MixVM {
             }
             7 => {
                 // MOVE
-                instruction::mov(m as i64, self.reg_i[0].val(), f as i64, &mut self.memory);
+                instruction::mov(m as i64, &mut self.reg_i[0], f as i64, &mut self.memory);
                 forward!(1, 1 + 2 * f);
             }
             8 => {
@@ -570,7 +594,7 @@ impl MixVM {
                         while self.disk[f].busy() {
                             forward!(0, 1);
                         }
-                        // tape is ready
+                        // disk is ready
                         let v = self.disk[f].read();
                         for (i, x) in v.into_iter().enumerate() {
                             self.memory[(m + i as i64) as usize] = x.clone();
@@ -580,7 +604,7 @@ impl MixVM {
                         while self.card_reader.busy() {
                             forward!(0, 1);
                         }
-                        // tape is ready
+                        // card reader is ready
                         let v = self.card_reader.read();
                         for (i, x) in v.into_iter().enumerate() {
                             self.memory[(m + i as i64) as usize] = x.clone();
@@ -590,7 +614,7 @@ impl MixVM {
                         while self.card_punch.busy() {
                             forward!(0, 1);
                         }
-                        // tape is ready
+                        // card punch is ready
                         let v = self.card_punch.read();
                         for (i, x) in v.into_iter().enumerate() {
                             self.memory[(m + i as i64) as usize] = x.clone();
@@ -600,7 +624,7 @@ impl MixVM {
                         while self.line_printer.busy() {
                             forward!(0, 1);
                         }
-                        // tape is ready
+                        // line printer is ready
                         let v = self.line_printer.read();
                         for (i, x) in v.into_iter().enumerate() {
                             self.memory[(m + i as i64) as usize] = x.clone();
@@ -610,7 +634,7 @@ impl MixVM {
                         while self.type_writer_terminal.busy() {
                             forward!(0, 1);
                         }
-                        // tape is ready
+                        // type writer terminal is ready
                         let v = self.type_writer_terminal.read();
                         for (i, x) in v.into_iter().enumerate() {
                             self.memory[(m + i as i64) as usize] = x.clone();
@@ -620,7 +644,7 @@ impl MixVM {
                         while self.paper_tape.busy() {
                             forward!(0, 1);
                         }
-                        // tape is ready
+                        // paper tape is ready
                         let v = self.paper_tape.read();
                         for (i, x) in v.into_iter().enumerate() {
                             self.memory[(m + i as i64) as usize] = x.clone();

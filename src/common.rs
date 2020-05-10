@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::string::ToString;
 
 pub const CHAR_TABLE: [char; 56] = [
     ' ', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'Δ', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
@@ -6,7 +7,44 @@ pub const CHAR_TABLE: [char; 56] = [
     '8', '9', '.', ',', '(', ')', '+', '-', '*', '/', '=', '$', '<', '>', '@', ';', ':', '\'',
 ];
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PseudoInstruction {
+    EQU,
+    ORIG,
+    CON,
+    ALF,
+    END,
+}
+
+impl FromStr for PseudoInstruction {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use PseudoInstruction::*;
+        match s {
+            "EQU" => Ok(EQU),
+            "ORIG" => Ok(ORIG),
+            "CON" => Ok(CON),
+            "ALF" => Ok(ALF),
+            "END" => Ok(END),
+            _ => Err(format!("{} is not PseudoInstruction", s)),
+        }
+    }
+}
+impl ToString for PseudoInstruction {
+    fn to_string(&self) -> String {
+        use PseudoInstruction::*;
+        match self {
+            EQU => "EQU",
+            ORIG => "ORIG",
+            CON => "CON",
+            ALF => "ALF",
+            END => "END",
+        }
+        .to_string()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Instruction {
     NOP,
     ADD,
@@ -310,6 +348,160 @@ impl FromStr for Instruction {
     }
 }
 
+impl ToString for Instruction {
+    fn to_string(&self) -> String {
+        use Instruction::*;
+        match self {
+            NOP => "NOP",
+            ADD => "ADD",
+            SUB => "SUB",
+            MUL => "MUL",
+            DIV => "DIV",
+            NUM => "NUM",
+            CHAR => "CHAR",
+            HLT => "HLT",
+            SLA => "SLA",
+            SRA => "SRA",
+            SLAX => "SLAX",
+            SRAX => "SRAX",
+            SLC => "SLC",
+            SRC => "SRC",
+            MOVE => "MOVE",
+            LDA => "LDA",
+            LD1 => "LD1",
+            LD2 => "LD2",
+            LD3 => "LD3",
+            LD4 => "LD4",
+            LD5 => "LD5",
+            LD6 => "LD6",
+            LDX => "LDX",
+            LDAN => "LDAN",
+            LD1N => "LD1N",
+            LD2N => "LD2N",
+            LD3N => "LD3N",
+            LD4N => "LD4N",
+            LD5N => "LD5N",
+            LD6N => "LD6N",
+            LDXN => "LDXN",
+            STA => "STA",
+            ST1 => "ST1",
+            ST2 => "ST2",
+            ST3 => "ST3",
+            ST4 => "ST4",
+            ST5 => "ST5",
+            ST6 => "ST6",
+            STX => "STX",
+            STJ => "STJ",
+            STZ => "STZ",
+            JBUS => "JBUS",
+            IOC => "IOC",
+            IN => "IN",
+            OUT => "OUT",
+            JRED => "JRED",
+            JMP => "JMP",
+            JSJ => "JSJ",
+            JOV => "JOV",
+            JNOV => "JNOV",
+            JL => "JL",
+            JE => "JE",
+            JG => "JG",
+            JGE => "JGE",
+            JNE => "JNE",
+            JLE => "JLE",
+            JAN => "JAN",
+            JAZ => "JAZ",
+            JAP => "JAP",
+            JANN => "JANN",
+            JANZ => "JANZ",
+            JANP => "JANP",
+            J1N => "J1N",
+            J1Z => "J1Z",
+            J1P => "J1P",
+            J1NN => "J1NN",
+            J1NZ => "J1NZ",
+            J1NP => "J1NP",
+            J2N => "J2N",
+            J2Z => "J2Z",
+            J2P => "J2P",
+            J2NN => "J2NN",
+            J2NZ => "J2NZ",
+            J2NP => "J2NP",
+            J3N => "J3N",
+            J3Z => "J3Z",
+            J3P => "J3P",
+            J3NN => "J3NN",
+            J3NZ => "J3NZ",
+            J3NP => "J3NP",
+            J4N => "J4N",
+            J4Z => "J4Z",
+            J4P => "J4P",
+            J4NN => "J4NN",
+            J4NZ => "J4NZ",
+            J4NP => "J4NP",
+            J5N => "J5N",
+            J5Z => "J5Z",
+            J5P => "J5P",
+            J5NN => "J5NN",
+            J5NZ => "J5NZ",
+            J5NP => "J5NP",
+            J6N => "J6N",
+            J6Z => "J6Z",
+            J6P => "J6P",
+            J6NN => "J6NN",
+            J6NZ => "J6NZ",
+            J6NP => "J6NP",
+            JXN => "JXN",
+            JXZ => "JXZ",
+            JXP => "JXP",
+            JXNN => "JXNN",
+            JXNZ => "JXNZ",
+            JXNP => "JXNP",
+            INCA => "INCA",
+            DECA => "DECA",
+            ENTA => "ENTA",
+            ENNA => "ENNA",
+            INC1 => "INC1",
+            DEC1 => "DEC1",
+            ENT1 => "ENT1",
+            ENN1 => "ENN1",
+            INC2 => "INC2",
+            DEC2 => "DEC2",
+            ENT2 => "ENT2",
+            ENN2 => "ENN2",
+            INC3 => "INC3",
+            DEC3 => "DEC3",
+            ENT3 => "ENT3",
+            ENN3 => "ENN3",
+            INC4 => "INC4",
+            DEC4 => "DEC4",
+            ENT4 => "ENT4",
+            ENN4 => "ENN4",
+            INC5 => "INC5",
+            DEC5 => "DEC5",
+            ENT5 => "ENT5",
+            ENN5 => "ENN5",
+            INC6 => "INC6",
+            DEC6 => "DEC6",
+            ENT6 => "ENT6",
+            ENN6 => "ENN6",
+            INCX => "INCX",
+            DECX => "DECX",
+            ENTX => "ENTX",
+            ENNX => "ENNX",
+            CMPA => "CMPA",
+            FCMP => "FCMP",
+            CMP1 => "CMP1",
+            CMP2 => "CMP2",
+            CMP3 => "CMP3",
+            CMP4 => "CMP4",
+            CMP5 => "CMP5",
+            CMP6 => "CMP6",
+            CMPX => "CMPX",
+        }
+        .to_string()
+    }
+}
+
 pub fn instruction_data(inst: &Instruction) -> (i64, i64, i64, i64) {
     use Instruction::*;
 
@@ -455,7 +647,7 @@ pub fn instruction_data(inst: &Instruction) -> (i64, i64, i64, i64) {
         &FCMP => (0, 0, 6, 56),
         &CMP1 => (0, 0, 5, 57),
         &CMP2 => (0, 0, 5, 58),
-        &CMP3 => (0, 0, 5, 58),
+        &CMP3 => (0, 0, 5, 59),
         &CMP4 => (0, 0, 5, 60),
         &CMP5 => (0, 0, 5, 61),
         &CMP6 => (0, 0, 5, 62),

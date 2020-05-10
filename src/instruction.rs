@@ -130,26 +130,26 @@ pub fn inc(m: i64, to: &mut Register, overflow: &mut bool) {
     let tmp_reg = Register::from_val(m);
     add(&tmp_reg, to, Register::pair(0, 5), overflow);
 }
-pub fn inci(m: i64, to: &mut Register) {
-    let tmp_reg = Register::from_val(m);
-    let mut overflow = false;
-    add(&tmp_reg, to, Register::pair(0, 5), &mut overflow);
-    if overflow {
-        panic!();
-    }
-}
+// pub fn inci(m: i64, to: &mut Register) {
+//     let tmp_reg = Register::from_val(m);
+//     let mut overflow = false;
+//     add(&tmp_reg, to, Register::pair(0, 5), &mut overflow);
+//     if overflow {
+//         panic!();
+//     }
+// }
 pub fn dec(m: i64, to: &mut Register, overflow: &mut bool) {
     let tmp_reg = Register::from_val(m);
     sub(&tmp_reg, to, Register::pair(0, 5), overflow);
 }
-pub fn deci(m: i64, to: &mut Register) {
-    let tmp_reg = Register::from_val(m);
-    let mut overflow = false;
-    sub(&tmp_reg, to, Register::pair(0, 5), &mut overflow);
-    if overflow {
-        panic!();
-    }
-}
+// pub fn deci(m: i64, to: &mut Register) {
+//     let tmp_reg = Register::from_val(m);
+//     let mut overflow = false;
+//     sub(&tmp_reg, to, Register::pair(0, 5), &mut overflow);
+//     if overflow {
+//         panic!();
+//     }
+// }
 
 // 比較命令
 pub fn comp(lhs: &Register, rhs: &Register, fspec: usize) -> Ordering {
@@ -257,10 +257,12 @@ pub fn rotate_right_pair(n: i64, reg_a: &mut Register, reg_x: &mut Register) {
         *reg_x.byte_mut(i).unwrap() = *reg.byte(5 + i).unwrap();
     }
 }
-pub fn mov(from: i64, to: i64, n: i64, mem: &mut Memory) {
+pub fn mov(from: i64, reg_i1: &mut Register, n: i64, mem: &mut Memory) {
+    let to = reg_i1.val();
     for x in 0..n {
         mem[(to + x) as usize] = mem[(from + x) as usize].clone();
     }
+    *reg_i1 = Register::from_val(to + n);
 }
 
 // 入出力装置
