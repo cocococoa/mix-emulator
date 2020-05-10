@@ -136,7 +136,7 @@ fn split_by_field(code: Vec<(usize, String)>) -> Vec<(usize, Content)> {
                     None
                 };
                 literal_constants.push((
-                    9999,
+                    5000,
                     Content {
                         attr: Attribute::PseudoInstruction(CON),
                         loc: Some(unique_addr),
@@ -802,7 +802,7 @@ pub fn format_code(code: String) -> String {
         },
     ) in tokenized_code
     {
-        let li = format!("{:4}", line);
+        let li = format!("{:4}", line + 1);
         ret.push_str(" | ");
         ret.push_str(&li);
         ret.push_str(" | ");
