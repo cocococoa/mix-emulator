@@ -1,11 +1,11 @@
 use crate::common::CHAR_TABLE;
-use crate::mix_word::WordImpl;
+use crate::mix_word::{Sign, WordImpl};
 
 pub trait IOUnit {
     type Word;
     fn block_size() -> usize;
 
-    fn read(&self) -> Vec<&Self::Word>;
+    fn read(&mut self) -> Vec<&Self::Word>;
     fn write(&mut self, w: Vec<&Self::Word>);
     fn seek(&mut self, offset: i64);
 
@@ -13,6 +13,7 @@ pub trait IOUnit {
     fn busy(&self) -> bool;
 
     fn print(&self) -> String;
+    fn set_input(&mut self, input: Vec<String>);
 }
 
 #[derive(Debug, Default, Clone)]
@@ -56,6 +57,24 @@ fn num_to_char(n: usize) -> char {
     CHAR_TABLE[n]
 }
 
+fn char_to_num(c: char) -> Option<usize> {
+    for (i, mix_c) in CHAR_TABLE.iter().enumerate() {
+        if c == *mix_c {
+            return Some(i);
+        }
+    }
+    None
+}
+fn chars_to_word(s: &str) -> Option<WordImpl> {
+    let mut v: Vec<u32> = vec![];
+    for c in s.chars() {
+        let n = char_to_num(c)?;
+        v.push(n as u32);
+    }
+
+    Some(WordImpl::from_seq(Sign::Positive, &v))
+}
+
 macro_rules! impl_io_trait {
     ($machine: ty, $block_size: expr) => {
         impl IOUnit for $machine {
@@ -63,11 +82,12 @@ macro_rules! impl_io_trait {
             fn block_size() -> usize {
                 $block_size
             }
-            fn read(&self) -> Vec<&Self::Word> {
+            fn read(&mut self) -> Vec<&Self::Word> {
                 let mut ret = vec![];
                 for i in 0..(Self::block_size()) {
                     ret.push(&self.data[self.pos + i]);
                 }
+                self.pos += Self::block_size();
                 ret
             }
             fn write(&mut self, w: Vec<&Self::Word>) {
@@ -97,16 +117,24 @@ macro_rules! impl_io_trait {
             }
             fn print(&self) -> String {
                 let mut ret = "".to_string();
-                for (line, x) in self.data.iter().enumerate() {
+                for (i, x) in self.data.iter().enumerate() {
                     for i in 0..5 {
                         let num = x.byte(i).unwrap().val();
                         ret.push(num_to_char(num as usize));
                     }
-                    if (line + 1) % Self::block_size() == 0 {
+                    if (i + 1) % Self::block_size() == 0 {
                         ret.push('\n');
                     }
                 }
                 ret
+            }
+            fn set_input(&mut self, input: Vec<String>) {
+                if input.len() != Self::block_size() {
+                    panic!();
+                }
+                for word in input {
+                    self.data.push(chars_to_word(&word).unwrap());
+                }
             }
         }
     };

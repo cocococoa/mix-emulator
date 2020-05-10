@@ -237,7 +237,6 @@ fn consume_atomic(code: &str) -> (AtomicExp, usize) {
 }
 
 fn consume_binop(code: &str) -> (BinaryOp, usize) {
-    println!("[binop] {}", code);
     match code.chars().nth(0).unwrap() {
         '+' => (BinaryOp::ADD, 1),
         '-' => (BinaryOp::SUB, 1),
@@ -478,10 +477,10 @@ fn resolve_symbol(code: Vec<(usize, Content)>) -> (usize, Vec<(usize, usize, Exp
         },
     ) in &mut expressed_code
     {
-        println!(
-            "[stage1] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-            _line, attr, loc, addr, index, modification
-        );
+        // println!(
+        //     "[stage1] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
+        //     _line, attr, loc, addr, index, modification
+        // );
         match attr {
             Attribute::PseudoInstruction(EQU) => {
                 let variable = loc.as_ref().unwrap().clone().to_string();
@@ -533,10 +532,10 @@ fn resolve_symbol(code: Vec<(usize, Content)>) -> (usize, Vec<(usize, usize, Exp
     let mut location_counter = 0usize;
     let mut entry_point = 0usize;
     for (line, mut content) in expressed_code {
-        println!(
-            "[stage2] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-            line, content.attr, content.loc, content.addr, content.index, content.modification
-        );
+        // println!(
+        //     "[stage2] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
+        //     line, content.attr, content.loc, content.addr, content.index, content.modification
+        // );
         if content.loc.is_some() {
             match is_local_symbol(&content.loc.as_ref().unwrap()) {
                 Some(value) => local_symbols.push(value, line, location_counter),
@@ -569,13 +568,13 @@ fn resolve_symbol(code: Vec<(usize, Content)>) -> (usize, Vec<(usize, usize, Exp
             }
         }
     }
-    println!("{:?}", symbols);
+    // println!("{:?}", symbols);
     // 3. resolve address
     for (line, _address, content) in &mut code_with_address {
-        println!(
-            "[stage3] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-            line, content.attr, content.loc, content.addr, content.index, content.modification
-        );
+        // println!(
+        //     "[stage3] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
+        //     line, content.attr, content.loc, content.addr, content.index, content.modification
+        // );
         match content.attr {
             Attribute::Instruction(_) | Attribute::PseudoInstruction(CON) => {
                 // TODO: implement more
@@ -635,10 +634,10 @@ fn encode_to_binary(
         },
     ) in code
     {
-        println!(
-            "[binary] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-            line, attr, _loc, addr, index, modification
-        );
+        // println!(
+        //     "[binary] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
+        //     line, attr, _loc, addr, index, modification
+        // );
         match attr {
             Attribute::PseudoInstruction(pinst) => {
                 if pinst == CON {
@@ -937,13 +936,6 @@ mod tests {
         ))));
         let tmp = format_code(code.to_string());
         println!("\n{}", tmp);
-    }
-    #[test]
-    fn test_str() {
-        let s = ", 10";
-        let mid = s.find(",").unwrap();
-        let l = s.get(..mid).unwrap();
-        println!("[test] {}, {}", l, l.len());
     }
     #[test]
     fn test_expression() {
