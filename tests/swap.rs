@@ -1,4 +1,4 @@
-use mix_emulator::asm::{assemble, format_code};
+use mix_emulator::asm::debug_assemble;
 use mix_emulator::vm::MixVM;
 use std::collections::HashMap;
 
@@ -93,18 +93,16 @@ fn test_swap1() {
                 SIZE CON 0
                 START CON 0
                 END BEGIN";
-    let (entry_point, binary) = assemble(code.to_string());
-    let mut v = vec![];
+    let (entry_point, binary) = debug_assemble(code);
     // addressと行の対応表を作成
+    let mut v = vec![];
     let mut table = HashMap::new();
     for (line, address, word) in binary {
         table.insert(address, line);
-        println!("{:2}, {:4}, {}", line, address, word);
+        println!("address: {:4}, BINARY: {}", address, word);
+        // println!("{:2}, {:4}, {}", line, address, word);
         v.push((address, word));
     }
-
-    let tmp = format_code(code.to_string());
-    println!("\n{}", tmp);
 
     let input1 = vec![
         "    (".to_string(),
@@ -337,12 +335,9 @@ fn test_swap2() {
                 EQUALS ALF ____=
                 END BEGIN";
 
-    let tmp = format_code(code.to_string());
-    println!("\n{}", tmp);
-
-    let (entry_point, binary) = assemble(code.to_string());
-    let mut v = vec![];
+    let (entry_point, binary) = debug_assemble(code);
     // addressと行の対応表を作成
+    let mut v = vec![];
     let mut table = HashMap::new();
     for (line, address, word) in binary {
         table.insert(address, line);
@@ -410,7 +405,7 @@ fn test_swap2() {
     }
 
     println!("clock: {}", vm.clock());
-    // println!("content: \n{}", vm.print(18));
+    println!("content: \n{}", vm.print(18));
 
     // 実行時情報を分析
     let code = split_by_line(code.to_string());

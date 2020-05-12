@@ -1,4 +1,4 @@
-use mix_emulator::asm::assemble;
+use mix_emulator::asm::debug_assemble;
 use mix_emulator::vm::MixVM;
 use std::collections::HashMap;
 
@@ -28,7 +28,7 @@ fn test_prime500() {
                 INC3 1
                 JG 6B
                 JMP 2B
-                WIDTH EQU 4
+                WIDTH EQU 20
                 2H OUT TITLE(PRINTER)
                 ENT4 2000+WIDTH
                 ENT5 -500/WIDTH
@@ -57,9 +57,9 @@ fn test_prime500() {
                 ORIG BUF1+24
                 CON BUF0+WIDTH
                 END START";
-    let (entry_point, binary) = assemble(code.to_string());
-    let mut v = vec![];
+    let (entry_point, binary) = debug_assemble(code);
     // addressと行の対応表を作成
+    let mut v = vec![];
     let mut table = HashMap::new();
     for (line, address, word) in binary {
         table.insert(address, line);
