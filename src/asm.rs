@@ -3,20 +3,10 @@ use crate::mix_word::{Byte, Sign, WordImpl};
 use std::collections::HashMap;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Attribute {
     Instruction(Instruction),
     PseudoInstruction(PseudoInstruction),
-    Comment,
-}
-
-#[derive(Debug, Clone)]
-struct Content {
-    attr: Attribute,
-    loc: Option<String>,
-    addr: Option<String>,
-    index: Option<String>,
-    modification: Option<String>,
 }
 
 fn to_instruction(s: &str) -> Option<Instruction> {
@@ -43,146 +33,317 @@ fn get_attribute(s: &str) -> Option<Attribute> {
         None
     }
 }
-
-fn split_by_line(code: String) -> Vec<(usize, String)> {
-    let mut ret = vec![];
-
-    for (l, content) in code.split_terminator('\n').enumerate() {
-        ret.push((l, content.trim().to_string()));
+fn char_to_num(c: char) -> Option<usize> {
+    for (i, mix_c) in CHAR_TABLE.iter().enumerate() {
+        if c == *mix_c {
+            return Some(i);
+        }
     }
-
-    ret
+    None
 }
-fn split_by_field(code: Vec<(usize, String)>) -> Vec<(usize, Content)> {
+fn split_into_loc_ope_addr(code: &str) -> (Option<&str>, Attribute, &str) {
+    // TODO: temporarily, assumes no whitespaces in code
+    let mut iter = code.split_whitespace();
+    let first_term = iter.next().unwrap();
+    let first_term_attribute = get_attribute(first_term);
+    let (loc, attr) = if first_term_attribute.is_none() {
+        // first term is loc
+        let second_term = iter.next().unwrap();
+        (Some(first_term), get_attribute(second_term).unwrap())
+    } else {
+        // first term is ope
+        // ERROR: if no operation in code
+        (None, first_term_attribute.unwrap())
+    };
+    let addr = iter.next().unwrap_or("0");
+
+    (loc, attr, addr)
+}
+fn split_into_addr_index_modi(code: &str) -> (&str, Option<&str>, Option<&str>) {
+    let (code, modi) = match code.find('(') {
+        Some(mid) => {
+            if !code.ends_with(")") {
+                // ERROR: should end with ")"
+                panic!();
+            }
+            (
+                code.get(..mid).unwrap(),
+                code.get((mid + 1)..(code.len() - 1)),
+            )
+        }
+        None => (code, None),
+    };
+    let (addr, index) = match code.find(",") {
+        Some(mid) => (code.get(..mid).unwrap(), code.get((mid + 1)..)),
+        None => (code, None),
+    };
+    (addr, index, modi)
+}
+// here
+fn is_local_symbol_h(s: &str) -> bool {
+    if s.ends_with("H") {
+        let digit_end = s.len() - 1;
+        s.get(..digit_end).unwrap().parse::<usize>().is_ok()
+    } else {
+        false
+    }
+}
+// forward
+fn is_local_symbol_f(s: &str) -> bool {
+    if s.ends_with("F") {
+        let digit_end = s.len() - 1;
+        s.get(..digit_end).unwrap().parse::<usize>().is_ok()
+    } else {
+        false
+    }
+}
+// backward
+fn is_local_symbol_b(s: &str) -> bool {
+    if s.ends_with("B") {
+        let digit_end = s.len() - 1;
+        s.get(..digit_end).unwrap().parse::<usize>().is_ok()
+    } else {
+        false
+    }
+}
+
+pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>, HashMap<usize, usize>) {
     use PseudoInstruction::*;
 
-    let mut ret = vec![];
-    let mut literal_constants: Vec<(usize, Content)> = vec![];
-    for (line, code) in code {
-        if code.starts_with("*") {
-            ret.push((
-                line,
-                Content {
-                    attr: Attribute::Comment,
-                    loc: None,
-                    addr: Some(code),
-                    index: None,
-                    modification: None,
-                },
-            ));
+    // return value
+    let mut binary: Vec<(usize, WordImpl)> = vec![];
+    let mut line_address: HashMap<usize, usize> = HashMap::new();
+    let mut entry_point = 0usize;
+
+    // tables
+    let mut symbol_table: HashMap<String, i64> = HashMap::new();
+    let mut unresolved_symbol: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut constant_literal: Vec<(String, String)> = vec![];
+
+    // generated codes
+    let mut generated_code: Vec<String> = vec![];
+
+    // loop indices
+    let mut line_iterator = code.lines().enumerate().peekable();
+    let mut location_counter = 0usize;
+
+    loop {
+        if line_iterator.peek().is_none() {
+            break;
+        }
+        // check whether this line is END or not
+        let (_line, content) = line_iterator.peek().unwrap();
+        let content = content.trim();
+        if content.starts_with("*") {
+            // comment
+            let _ = line_iterator.next();
             continue;
         }
-        let mut iter = code.split_whitespace();
-        let first_term = iter.next().unwrap();
-        let first_term_attribute = get_attribute(first_term);
-        let (loc, attr) = if first_term_attribute.is_none() {
-            // first term is loc
-            let second_term = iter.next().unwrap();
-            (
-                Some(first_term.to_string()),
-                get_attribute(second_term).unwrap(),
-            )
+        let (_loc, attr, _addr) = split_into_loc_ope_addr(content);
+
+        let (line, content) = if attr == Attribute::PseudoInstruction(END) {
+            // if END, generate codes
+            if constant_literal.len() != 0 {
+                let (unique_symbol, addr) = constant_literal.pop().unwrap();
+                generated_code.push(unique_symbol + " CON " + &addr);
+                // TODO: remove magic number 7777
+                (7777, generated_code.last().unwrap().as_str())
+            } else if unresolved_symbol.len() != 0 {
+                let loc = unresolved_symbol.keys().next().unwrap();
+                generated_code.push(loc.clone() + " CON 0");
+                (7777, generated_code.last().unwrap().as_str())
+            } else {
+                // all tables are clear
+                line_iterator.next().unwrap()
+            }
         } else {
-            (None, first_term_attribute.unwrap())
+            // if not END, step iterator
+            line_iterator.next().unwrap()
         };
 
-        // rest == addr + index + modification
-        let rest = iter.collect::<String>();
-        if attr == Attribute::PseudoInstruction(END) {
-            // move literal constants to ret
-            for e in &literal_constants {
-                ret.push(e.clone());
-            }
-        }
-        if attr == Attribute::PseudoInstruction(ALF) {
-            ret.push((
-                line,
-                Content {
-                    attr: attr,
-                    loc: loc,
-                    addr: Some(rest),
-                    index: None,
-                    modification: None,
-                },
-            ))
-        } else {
-            if rest.starts_with("=") && rest.ends_with("=") {
-                // "A" part is literal constant
-                let unique_addr = "LC".to_string() + &literal_constants.len().to_string();
-                ret.push((
-                    line,
-                    Content {
-                        attr: attr,
-                        loc: loc,
-                        addr: Some(unique_addr.clone()),
-                        index: None,
-                        modification: None,
-                    },
-                ));
-                let rest = rest.get(1..(rest.len() - 1)).unwrap().to_string();
-                let (rest, modification) = match rest.find("(") {
-                    Some(begin) => {
-                        let end = rest.find(")").unwrap();
-                        (
-                            rest.get(..begin).unwrap().to_string(),
-                            Some(rest.get((begin + 1)..end).unwrap().trim().to_string()),
-                        )
-                    }
-                    None => (rest, None),
-                };
-                let addr = if rest.trim().len() != 0 {
-                    Some(rest.trim().to_string())
-                } else {
-                    None
-                };
-                literal_constants.push((
-                    5000,
-                    Content {
-                        attr: Attribute::PseudoInstruction(CON),
-                        loc: Some(unique_addr),
-                        addr: addr,
-                        index: None,
-                        modification: modification,
-                    },
-                ));
-            } else {
-                let (rest, modification) = match rest.find("(") {
-                    Some(begin) => {
-                        let end = rest.find(")").unwrap();
-                        (
-                            rest.get(..begin).unwrap().to_string(),
-                            Some(rest.get((begin + 1)..end).unwrap().trim().to_string()),
-                        )
-                    }
-                    None => (rest, None),
-                };
-                let (rest, index) = match rest.find(",") {
-                    Some(begin) => (
-                        rest.get(..begin).unwrap().to_string(),
-                        Some(rest.get((begin + 1)..).unwrap().trim().to_string()),
-                    ),
-                    None => (rest, None),
-                };
-                let addr = if rest.trim().len() != 0 {
-                    Some(rest.trim().to_string())
-                } else {
-                    None
-                };
-                ret.push((
-                    line,
-                    Content {
-                        attr: attr,
-                        loc: loc,
-                        addr: addr,
-                        index: index,
-                        modification: modification,
-                    },
-                ))
-            }
-        }
-    }
+        // 1. split content into LOC, OPE, ADDR
+        let (loc, attr, addr) = split_into_loc_ope_addr(content);
 
-    ret
+        // 2. push LOC into HashMap
+        if attr != Attribute::PseudoInstruction(EQU) && loc.is_some() {
+            let loc = loc.unwrap();
+            let loc = if is_local_symbol_h(loc) {
+                loc.get(..(loc.len() - 1)).unwrap()
+            } else {
+                loc
+            };
+            // search unresolved symbols and resolve them
+            let unresolved = unresolved_symbol.remove(loc);
+            if unresolved.is_some() {
+                let unresolved = unresolved.unwrap();
+                for pos in unresolved.iter() {
+                    let word = &mut binary.get_mut(*pos).unwrap().1;
+                    *word.byte_mut(0).unwrap() =
+                        Byte::new((location_counter / Byte::max() as usize) as u32);
+                    *word.byte_mut(1).unwrap() =
+                        Byte::new((location_counter % Byte::max() as usize) as u32);
+                }
+            }
+            // if loc is local symbol, remove from symbol_table
+            if loc.parse::<usize>().is_ok() {
+                let _ = symbol_table.remove(loc);
+            }
+            if symbol_table.get(loc).is_some() {
+                // ERROR: cannot define twice
+                panic!();
+            }
+            symbol_table.insert(loc.to_string(), location_counter as i64);
+        }
+
+        // 3. deal with ALF
+        if attr == Attribute::PseudoInstruction(ALF) {
+            if addr.len() != 5 {
+                // ERROR: addr length should be equal to 5
+                panic!();
+            }
+            let mut v = vec![];
+            for c in addr.replace("_", " ").chars() {
+                match char_to_num(c) {
+                    Some(num) => v.push(num as u32),
+                    // ERROR: illegal char in addr
+                    None => panic!(),
+                }
+            }
+            binary.push((location_counter, WordImpl::from_seq(Sign::Positive, &v)));
+            line_address.insert(line, location_counter);
+            location_counter += 1;
+            continue;
+        }
+
+        // 4. deal with literal constants
+        let addr = if addr.starts_with("=") {
+            if !addr.ends_with("=") {
+                // ERROR: should end with "="
+                panic!();
+            }
+            // TODO: generate real unique symbol
+            let unique_symbol = "UNQSYM".to_string() + &constant_literal.len().to_string();
+            constant_literal.push((
+                unique_symbol,
+                addr.get(1..(addr.len() - 1)).unwrap().to_string(),
+            ));
+
+            &constant_literal.last().as_ref().unwrap().0
+        } else {
+            addr
+        };
+
+        // 5. split addr into ADDR, INDEX, MODIFICATION and construct expression
+        // and resolve symbols
+        // TODO: temporarily, ignore W-value
+        let (addr, index, modi) = split_into_addr_index_modi(addr);
+        let index = index
+            .map(|s| construct_exp(s))
+            .map(|exp| replace_symbol(exp, &symbol_table))
+            .map(|exp| replace_asterisk(exp, location_counter))
+            .map(|exp| eval(exp).unwrap());
+        let modi = modi
+            .map(|s| construct_exp(s))
+            .map(|exp| replace_symbol(exp, &symbol_table))
+            .map(|exp| replace_asterisk(exp, location_counter))
+            .map(|exp| eval(exp).unwrap());
+        // TODO: remove Some(..).map()....unwrap() pattern
+        let mut addr = Some(addr)
+            .map(|s| construct_exp(s))
+            .map(|exp| replace_symbol(exp, &symbol_table))
+            .map(|exp| replace_asterisk(exp, location_counter))
+            .unwrap();
+
+        // 6. if addr contains unresolved symbol, insert to unresolve_symbol HashMap
+        if get_unresolved_symbol(&addr).is_some() {
+            // ERROR: addr with unresolved symbol has empty binop
+            assert_eq!(addr.binop, vec![]);
+
+            let mut s = get_unresolved_symbol(&addr).unwrap();
+            if is_local_symbol_f(s.as_ref()) {
+                s.pop();
+            }
+            match unresolved_symbol.get_mut(&s) {
+                Some(v) => {
+                    v.push(binary.len());
+                }
+                None => {
+                    unresolved_symbol.insert(s, vec![binary.len()]);
+                }
+            }
+
+            // assign zero for temp.
+            addr = Exp {
+                unary: UnaryOp::Plus,
+                atom: AtomicExp::Num(0),
+                binop: vec![],
+            };
+        };
+
+        // 7. addr is evaluatable
+        let addr = eval(addr).unwrap();
+
+        // 8. finalize (encode to binary)
+        match attr {
+            Attribute::Instruction(inst) => {
+                let (_a, i, f, c) = instruction_data(&inst);
+                let mut a = addr;
+                let i = index.unwrap_or(i as i64);
+                let f = modi.unwrap_or(f as i64);
+                let sign = if a < 0 {
+                    a = a.abs();
+                    Sign::Negative
+                } else {
+                    Sign::Positive
+                };
+
+                binary.push((
+                    location_counter,
+                    WordImpl::from_seq(
+                        sign,
+                        &vec![
+                            a as u32 / Byte::max(),
+                            a as u32 % Byte::max(),
+                            i as u32,
+                            f as u32,
+                            c as u32,
+                        ],
+                    ),
+                ));
+                line_address.insert(line, location_counter);
+                location_counter += 1;
+            }
+            Attribute::PseudoInstruction(EQU) => {
+                assert!(index.is_none());
+                let var = loc.unwrap();
+                let val = weval(addr, modi.unwrap_or(5));
+                symbol_table.insert(var.to_string(), val);
+            }
+            Attribute::PseudoInstruction(ORIG) => {
+                assert!(index.is_none());
+                location_counter = weval(addr, modi.unwrap_or(5)) as usize;
+            }
+            Attribute::PseudoInstruction(CON) => {
+                assert!(index.is_none());
+                binary.push((
+                    location_counter,
+                    WordImpl::from_val(weval(addr, modi.unwrap_or(5))),
+                ));
+                line_address.insert(line, location_counter);
+                location_counter += 1;
+            }
+            Attribute::PseudoInstruction(END) => {
+                assert!(index.is_none());
+                let val = weval(addr, modi.unwrap_or(5));
+                entry_point = val as usize;
+            }
+            Attribute::PseudoInstruction(ALF) => {
+                unreachable!();
+            }
+        }
+    } // main loop
+
+    (entry_point, binary, line_address)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -205,16 +366,13 @@ enum BinaryOp {
     FRAC,
     COLON,
 }
-
 #[derive(Debug, PartialEq, Eq)]
 struct Exp {
     unary: UnaryOp,
     atom: AtomicExp,
     binop: Vec<(BinaryOp, AtomicExp)>,
 }
-
 const SYMBOL: [char; 5] = ['+', '-', '*', '/', ':'];
-
 fn consume_atomic(code: &str) -> (AtomicExp, usize) {
     if code.chars().nth(0).unwrap() == '*' {
         (AtomicExp::Asterisk, 1)
@@ -235,7 +393,6 @@ fn consume_atomic(code: &str) -> (AtomicExp, usize) {
         (atom, end)
     }
 }
-
 fn consume_binop(code: &str) -> (BinaryOp, usize) {
     match code.chars().nth(0).unwrap() {
         '+' => (BinaryOp::ADD, 1),
@@ -252,7 +409,6 @@ fn consume_binop(code: &str) -> (BinaryOp, usize) {
         _ => unreachable!(),
     }
 }
-
 fn construct_exp(code: &str) -> Exp {
     // TODO: temporarily, assumes no whitespaces in code
     let (unary, mut look_at) = if code.chars().nth(0).unwrap() == '+' {
@@ -284,44 +440,76 @@ fn construct_exp(code: &str) -> Exp {
         binop: binop,
     }
 }
-
-#[derive(Debug)]
-struct ExpContent {
-    attr: Attribute,
-    loc: Option<String>,
-    addr: Option<Exp>,
-    index: Option<Exp>,
-    modification: Option<Exp>,
+fn replace_asterisk_impl(atom: AtomicExp, location_counter: usize) -> AtomicExp {
+    match atom {
+        AtomicExp::Asterisk => AtomicExp::Num(location_counter as i64),
+        _ => atom,
+    }
 }
+fn replace_asterisk(exp: Exp, location_counter: usize) -> Exp {
+    let unary = exp.unary;
+    let atom = replace_asterisk_impl(exp.atom, location_counter);
+    let mut binop = vec![];
+    for (op, atom) in exp.binop {
+        binop.push((op, replace_asterisk_impl(atom, location_counter)));
+    }
 
-fn evaluate_exp(exp: &Exp, symbols: &HashMap<String, i64>) -> Result<i64, ()> {
+    Exp {
+        unary: unary,
+        atom: atom,
+        binop: binop,
+    }
+}
+fn replace_symbol_impl(atom: AtomicExp, symbols: &HashMap<String, i64>) -> AtomicExp {
+    match &atom {
+        AtomicExp::Symbol(s) => {
+            // TODO: move is_local_symbol_b to outside of this func.
+            let s = if is_local_symbol_b(s.as_str()) {
+                s.get(..(s.len() - 1)).unwrap()
+            } else {
+                s
+            };
+            symbols.get(s).map(|v| AtomicExp::Num(*v)).unwrap_or(atom)
+        }
+        _ => atom,
+    }
+}
+fn replace_symbol(exp: Exp, symbols: &HashMap<String, i64>) -> Exp {
+    let unary = exp.unary;
+    let atom = replace_symbol_impl(exp.atom, &symbols);
+    let mut binop = vec![];
+    for (op, atom) in exp.binop {
+        binop.push((op, replace_symbol_impl(atom, &symbols)));
+    }
+
+    Exp {
+        unary: unary,
+        atom: atom,
+        binop: binop,
+    }
+}
+fn get_unresolved_symbol(e: &Exp) -> Option<String> {
+    match &e.atom {
+        AtomicExp::Symbol(s) => Some(s.clone()),
+        _ => None,
+    }
+}
+fn eval(exp: Exp) -> Result<i64, ()> {
     use BinaryOp::*;
 
-    let mut evaluated = match &exp.atom {
-        AtomicExp::Asterisk => {
-            return Err(());
-        }
-        AtomicExp::Symbol(s) => match symbols.get(s) {
-            Some(v) => *v,
-            None => return Err(()),
-        },
-        AtomicExp::Num(v) => *v,
+    let mut evaluated = match exp.atom {
+        AtomicExp::Num(v) => v,
+        _ => return Err(()),
     };
     evaluated = match exp.unary {
         UnaryOp::Plus => evaluated,
         UnaryOp::Minus => -evaluated,
     };
 
-    for (binop, atom) in &exp.binop {
+    for (binop, atom) in exp.binop {
         let evaluated_atom = match atom {
-            AtomicExp::Asterisk => {
-                return Err(());
-            }
-            AtomicExp::Symbol(s) => match symbols.get(s) {
-                Some(v) => *v,
-                None => return Err(()),
-            },
-            AtomicExp::Num(v) => *v,
+            AtomicExp::Num(v) => v,
+            _ => return Err(()),
         };
 
         match binop {
@@ -336,520 +524,15 @@ fn evaluate_exp(exp: &Exp, symbols: &HashMap<String, i64>) -> Result<i64, ()> {
 
     Ok(evaluated)
 }
-fn replace_asterisk(exp: &mut Exp, location_counter: usize) {
-    match exp.atom {
-        AtomicExp::Asterisk => {
-            exp.atom = AtomicExp::Num(location_counter as i64);
-        }
-        _ => {}
-    }
-    for (_binop, atom) in &mut exp.binop {
-        match atom {
-            AtomicExp::Asterisk => {
-                *atom = AtomicExp::Num(location_counter as i64);
-            }
-            _ => {}
-        }
-    }
-}
-fn replace_exp(exp: &mut Exp, symbols: &HashMap<String, i64>) {
-    match &mut exp.atom {
-        AtomicExp::Symbol(s) => {
-            let v = symbols.get(s);
-            if v.is_some() {
-                exp.atom = AtomicExp::Num(*v.unwrap());
-            }
-        }
-        _ => {}
-    }
-    for (_binop, atom) in &mut exp.binop {
-        match atom {
-            AtomicExp::Symbol(s) => {
-                let v = symbols.get(s);
-                if v.is_some() {
-                    *atom = AtomicExp::Num(*v.unwrap());
-                }
-            }
-            _ => {}
-        }
-    }
+fn weval(a: i64, f: i64) -> i64 {
+    // TODO: evaluate real W-value in the future
+    WordImpl::from_val(a).subword(f as usize).unwrap().val()
 }
 
-fn is_local_symbol(s: &str) -> Option<usize> {
-    if s.ends_with("H") || s.ends_with("F") || s.ends_with("B") {
-        let num_end = s.len() - 1;
-        match s.get(..num_end).unwrap().parse::<usize>() {
-            Ok(v) => Some(v),
-            Err(_) => None,
-        }
-    } else {
-        None
-    }
-}
+pub fn release_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>) {
+    let (entry_point, binary, _table) = debug_assemble(code);
 
-fn get_symbol(e: &Exp) -> Option<String> {
-    match &e.atom {
-        AtomicExp::Symbol(s) => Some(s.clone()),
-        _ => None,
-    }
-}
-
-fn make_num_exp(n: i64) -> Exp {
-    Exp {
-        unary: if n >= 0 {
-            UnaryOp::Plus
-        } else {
-            UnaryOp::Minus
-        },
-        atom: AtomicExp::Num(n.abs()),
-        binop: vec![],
-    }
-}
-
-// TODO: implement W-value
-fn resolve_symbol(code: Vec<(usize, Content)>) -> (usize, Vec<(usize, usize, ExpContent)>) {
-    use PseudoInstruction::*;
-
-    // 0. construct expression
-    let mut expressed_code = vec![];
-    for (
-        line,
-        Content {
-            attr,
-            loc,
-            addr,
-            index,
-            modification,
-        },
-    ) in code
-    {
-        match attr {
-            Attribute::Comment => {}
-            Attribute::PseudoInstruction(ALF) => expressed_code.push((
-                line,
-                ExpContent {
-                    attr: attr,
-                    loc: loc,
-                    addr: Some(Exp {
-                        unary: UnaryOp::Plus,
-                        atom: AtomicExp::Symbol(addr.unwrap()),
-                        binop: vec![],
-                    }),
-                    index: None,
-                    modification: None,
-                },
-            )),
-            _ => expressed_code.push((
-                line,
-                ExpContent {
-                    attr: attr,
-                    loc: loc,
-                    addr: if addr.is_some() {
-                        Some(construct_exp(&addr.unwrap()))
-                    } else {
-                        None
-                    },
-                    index: if index.is_some() {
-                        Some(construct_exp(&index.unwrap()))
-                    } else {
-                        None
-                    },
-                    modification: if modification.is_some() {
-                        Some(construct_exp(&modification.unwrap()))
-                    } else {
-                        None
-                    },
-                },
-            )),
-        }
-    }
-
-    // 1. resolve EQU
-    let mut symbols = HashMap::new();
-    for (
-        _line,
-        ExpContent {
-            attr,
-            loc,
-            addr,
-            index,
-            modification,
-        },
-    ) in &mut expressed_code
-    {
-        // println!(
-        //     "[stage1] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-        //     _line, attr, loc, addr, index, modification
-        // );
-        match attr {
-            Attribute::PseudoInstruction(EQU) => {
-                let variable = loc.as_ref().unwrap().clone().to_string();
-                let addr_value = evaluate_exp(addr.as_ref().unwrap(), &symbols).unwrap();
-                let value = if modification.is_some() {
-                    let modification_value =
-                        evaluate_exp(modification.as_ref().unwrap(), &symbols).unwrap();
-                    WordImpl::from_val(addr_value)
-                        .subword(modification_value as usize)
-                        .unwrap()
-                        .val()
-                } else {
-                    addr_value
-                };
-                symbols.insert(variable, value);
-            }
-            Attribute::PseudoInstruction(ORIG)
-            | Attribute::PseudoInstruction(CON)
-            | Attribute::PseudoInstruction(END) => {
-                if addr.is_some() {
-                    replace_exp(&mut addr.as_mut().unwrap(), &symbols);
-                }
-                if modification.is_some() {
-                    replace_exp(&mut modification.as_mut().unwrap(), &symbols);
-                }
-            }
-            Attribute::Instruction(_) => {
-                if addr.is_some() {
-                    replace_exp(&mut addr.as_mut().unwrap(), &symbols);
-                }
-                if index.is_some() {
-                    replace_exp(&mut index.as_mut().unwrap(), &symbols);
-                }
-                if modification.is_some() {
-                    replace_exp(&mut modification.as_mut().unwrap(), &symbols);
-                }
-            }
-            _ => {
-                // comment or ALF
-            }
-        }
-    }
-
-    // 2. construct symbol table
-    let mut local_symbols = SymbolTable {
-        table: HashMap::new(),
-    };
-    let mut code_with_address = vec![];
-    let mut location_counter = 0usize;
-    let mut entry_point = 0usize;
-    for (line, mut content) in expressed_code {
-        // println!(
-        //     "[stage2] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-        //     line, content.attr, content.loc, content.addr, content.index, content.modification
-        // );
-        if content.loc.is_some() {
-            match is_local_symbol(&content.loc.as_ref().unwrap()) {
-                Some(value) => local_symbols.push(value, line, location_counter),
-                None => {
-                    let _ = symbols.insert(
-                        content.loc.as_ref().unwrap().clone(),
-                        location_counter as i64,
-                    );
-                }
-            }
-        }
-        match content.attr {
-            Attribute::PseudoInstruction(ORIG) => {
-                replace_asterisk(&mut content.addr.as_mut().unwrap(), location_counter);
-                location_counter = evaluate_exp(&content.addr.unwrap(), &symbols).unwrap() as usize;
-            }
-            Attribute::PseudoInstruction(END) => {
-                replace_asterisk(&mut content.addr.as_mut().unwrap(), location_counter);
-                entry_point = evaluate_exp(&content.addr.unwrap(), &symbols).unwrap() as usize;
-                break;
-            }
-            Attribute::PseudoInstruction(EQU) => {}
-            Attribute::Comment => {}
-            _ => {
-                if content.addr.is_some() {
-                    replace_asterisk(&mut content.addr.as_mut().unwrap(), location_counter);
-                }
-                code_with_address.push((line, location_counter, content));
-                location_counter += 1;
-            }
-        }
-    }
-    // println!("{:?}", symbols);
-    // 3. resolve address
-    for (line, _address, content) in &mut code_with_address {
-        // println!(
-        //     "[stage3] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-        //     line, content.attr, content.loc, content.addr, content.index, content.modification
-        // );
-        match content.attr {
-            Attribute::Instruction(_) | Attribute::PseudoInstruction(CON) => {
-                // TODO: implement more
-                if content.addr.is_some() {
-                    replace_exp(&mut content.addr.as_mut().unwrap(), &symbols);
-                    if evaluate_exp(content.addr.as_ref().unwrap(), &symbols).is_err() {
-                        let addr = get_symbol(content.addr.as_ref().unwrap()).unwrap();
-                        match is_local_symbol(&addr) {
-                            Some(v) => {
-                                // resolve local symbol
-                                *content.addr.as_mut().unwrap() = if addr.ends_with("F") {
-                                    make_num_exp(local_symbols.resolve_forward(v, *line) as i64)
-                                } else {
-                                    make_num_exp(local_symbols.resolve_backward(v, *line) as i64)
-                                }
-                            }
-                            None => {}
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    (entry_point, code_with_address)
-}
-
-fn char_to_num(c: char) -> Option<usize> {
-    for (i, mix_c) in CHAR_TABLE.iter().enumerate() {
-        if c == *mix_c {
-            return Some(i);
-        }
-    }
-    None
-}
-
-fn encode_to_binary(
-    resolved_code: (usize, Vec<(usize, usize, ExpContent)>),
-) -> (usize, Vec<(usize, usize, WordImpl)>) {
-    use PseudoInstruction::*;
-
-    let (entry_point, code) = resolved_code;
-
-    let mut ret = vec![];
-    let symbols = HashMap::new();
-
-    for (
-        line,
-        address,
-        ExpContent {
-            attr,
-            loc: _loc,
-            addr,
-            index,
-            modification,
-        },
-    ) in code
-    {
-        // println!(
-        //     "[binary] line: {:2}, attr: {:?}, loc: {:?}, addr: {:?}, index: {:?}, modi: {:?}",
-        //     line, attr, _loc, addr, index, modification
-        // );
-        match attr {
-            Attribute::PseudoInstruction(pinst) => {
-                if pinst == CON {
-                    let x = evaluate_exp(&addr.unwrap(), &symbols);
-                    ret.push((line, address, WordImpl::from_val(x.unwrap())));
-                } else if pinst == ALF {
-                    let mut v = vec![];
-                    let addr = get_symbol(&addr.unwrap());
-                    for c in addr.unwrap().replace("_", " ").chars() {
-                        v.push(char_to_num(c).unwrap() as u32);
-                    }
-                    ret.push((line, address, WordImpl::from_seq(Sign::Positive, &v)));
-                } else {
-                    unreachable!();
-                }
-            }
-            Attribute::Instruction(inst) => {
-                let (mut a, mut i, mut f, c) = instruction_data(&inst);
-                if addr.is_some() {
-                    a = evaluate_exp(&addr.unwrap(), &symbols).unwrap();
-                }
-                if index.is_some() {
-                    i = evaluate_exp(&index.unwrap(), &symbols).unwrap();
-                }
-                if modification.is_some() {
-                    f = evaluate_exp(&modification.unwrap(), &symbols).unwrap();
-                }
-                let sign = if a < 0 {
-                    a = a.abs();
-                    Sign::Negative
-                } else {
-                    Sign::Positive
-                };
-
-                ret.push((
-                    line,
-                    address,
-                    WordImpl::from_seq(
-                        sign,
-                        &vec![
-                            a as u32 / Byte::max(),
-                            a as u32 % Byte::max(),
-                            i as u32,
-                            f as u32,
-                            c as u32,
-                        ],
-                    ),
-                ))
-            }
-            _ => {
-                unreachable!();
-            }
-        }
-    }
-
-    (entry_point, ret)
-}
-
-pub fn assemble(code: String) -> (usize, Vec<(usize, usize, WordImpl)>) {
-    encode_to_binary(resolve_symbol(split_by_field(split_by_line(code))))
-}
-
-#[derive(Debug)]
-struct SymbolTable {
-    table: HashMap<usize, Vec<(usize, usize)>>,
-}
-impl SymbolTable {
-    pub fn push(&mut self, variable: usize, line: usize, address: usize) {
-        match self.table.get_mut(&variable) {
-            Some(v) => {
-                (*v).push((line, address));
-            }
-            None => {
-                self.table.insert(variable, vec![(line, address)]);
-            }
-        }
-    }
-    pub fn resolve_backward(&self, variable: usize, line: usize) -> usize {
-        let v = self.table.get(&variable).unwrap();
-        v.iter()
-            .filter_map(|e| if e.0 < line { Some(e.1) } else { None })
-            .collect::<Vec<_>>()
-            .pop()
-            .unwrap()
-    }
-    pub fn resolve_forward(&self, variable: usize, line: usize) -> usize {
-        let v = self.table.get(&variable).unwrap();
-        v.iter()
-            .filter_map(|e| if e.0 > line { Some(e.1) } else { None })
-            .collect::<Vec<_>>()[0]
-    }
-}
-
-fn format_finite_length(s: &str, len: usize) -> String {
-    " ".repeat(len - s.len()).to_string() + s
-}
-
-pub fn format_code(code: String) -> String {
-    use std::cmp::max;
-    let tokenized_code = split_by_field(split_by_line(code));
-    let mut loc_len = 0usize;
-    let mut a_len = 0usize;
-    let mut i_len = 0usize;
-    let mut f_len = 0usize;
-    for (
-        _line,
-        Content {
-            attr,
-            loc,
-            addr,
-            index,
-            modification,
-        },
-    ) in &tokenized_code
-    {
-        if attr != &Attribute::Comment {
-            if loc.is_some() {
-                loc_len = max(loc_len, loc.as_ref().unwrap().len());
-            }
-            if addr.is_some() {
-                a_len = max(a_len, addr.as_ref().unwrap().len())
-            }
-            if index.is_some() {
-                i_len = max(i_len, index.as_ref().unwrap().len())
-            }
-            if modification.is_some() {
-                f_len = max(f_len, modification.as_ref().unwrap().len())
-            }
-        }
-    }
-
-    // 遊びを持たせる
-    loc_len += 3;
-    a_len += 3;
-    i_len += 3;
-    f_len += 3;
-
-    let mut ret = "".to_string();
-
-    ret.push_str(" | ");
-    ret.push_str("LINE");
-    ret.push_str(" | ");
-    ret.push_str(&format_finite_length("LOC", loc_len));
-    ret.push_str(" | ");
-    ret.push_str("   OPE");
-    ret.push_str(" | ");
-    ret.push_str(&format_finite_length("A", a_len));
-    ret.push_str(" | ");
-    ret.push_str(&format_finite_length("I", i_len));
-    ret.push_str(" | ");
-    ret.push_str(&format_finite_length("F", f_len));
-    ret.push_str(" | ");
-    ret.push('\n');
-    for (
-        line,
-        Content {
-            attr,
-            loc,
-            addr,
-            index,
-            modification,
-        },
-    ) in tokenized_code
-    {
-        let li = format!("{:4}", line + 1);
-        ret.push_str(" | ");
-        ret.push_str(&li);
-        ret.push_str(" | ");
-        if attr == Attribute::Comment {
-            ret.push_str(&addr.unwrap());
-            ret.push('\n');
-        } else {
-            let lo = if loc.is_some() {
-                format_finite_length(&loc.unwrap(), loc_len)
-            } else {
-                " ".repeat(loc_len).to_string()
-            };
-            let op = match attr {
-                Attribute::Instruction(inst) => format_finite_length(&inst.to_string(), 6),
-                Attribute::PseudoInstruction(pinst) => format_finite_length(&pinst.to_string(), 6),
-                _ => "".to_string(),
-            };
-            let a = if addr.is_some() {
-                format_finite_length(addr.as_ref().unwrap(), a_len)
-            } else {
-                " ".repeat(a_len).to_string()
-            };
-            let i = if index.is_some() {
-                format_finite_length(index.as_ref().unwrap(), i_len)
-            } else {
-                " ".repeat(i_len).to_string()
-            };
-            let f = if modification.is_some() {
-                format_finite_length(modification.as_ref().unwrap(), f_len)
-            } else {
-                " ".repeat(f_len).to_string()
-            };
-            ret.push_str(&lo);
-            ret.push_str(" | ");
-            ret.push_str(&op);
-            ret.push_str(" | ");
-            ret.push_str(&a);
-            ret.push_str(" | ");
-            ret.push_str(&i);
-            ret.push_str(" | ");
-            ret.push_str(&f);
-            ret.push_str(" | ");
-            ret.push('\n');
-        }
-    }
-
-    ret
+    (entry_point, binary)
 }
 
 #[cfg(test)]
@@ -910,11 +593,7 @@ mod tests {
                     ORIG BUF1+24
                     CON BUF0+10
                     END START";
-        let _tmp = encode_to_binary(resolve_symbol(split_by_field(split_by_line(
-            code.to_string(),
-        ))));
-        let tmp = format_code(code.to_string());
-        println!("\n{}", tmp);
+        debug_assemble(code);
     }
     #[test]
     fn test_max() {
@@ -931,11 +610,7 @@ mod tests {
                     J3P LOOP
                     EXIT JMP *
                     END START";
-        let _tmp = encode_to_binary(resolve_symbol(split_by_field(split_by_line(
-            code.to_string(),
-        ))));
-        let tmp = format_code(code.to_string());
-        println!("\n{}", tmp);
+        debug_assemble(code);
     }
     #[test]
     fn test_expression() {

@@ -1,9 +1,10 @@
-use mix_emulator::asm::assemble;
+use mix_emulator::asm::debug_assemble;
+use mix_emulator::tools::run;
 use mix_emulator::vm::MixVM;
-use std::collections::HashMap;
 
 #[test]
 fn test_prime500() {
+    // 1. make input
     let code = "* EXAMPLE PROGRAM ... TABLE OF PRIMES
                 * 
                 L EQU 500
@@ -28,7 +29,7 @@ fn test_prime500() {
                 INC3 1
                 JG 6B
                 JMP 2B
-                WIDTH EQU 4
+                WIDTH EQU 20
                 2H OUT TITLE(PRINTER)
                 ENT4 2000+WIDTH
                 ENT5 -500/WIDTH
@@ -57,69 +58,21 @@ fn test_prime500() {
                 ORIG BUF1+24
                 CON BUF0+WIDTH
                 END START";
-    let (entry_point, binary) = assemble(code.to_string());
-    let mut v = vec![];
-    // addressと行の対応表を作成
-    let mut table = HashMap::new();
-    for (line, address, word) in binary {
-        table.insert(address, line);
-        println!("{:2}, {:4}, {}", line, address, word);
-        v.push((address, word));
-    }
+
+    // 2. run VM
+    let (entry_point, binary, table) = debug_assemble(code);
     let mut vm = MixVM::new();
-    vm.load(&v);
+    vm.load(&binary);
     vm.set_pc(entry_point);
-    let mut counter = vec![(0, 0); 4000];
-    let mut current_clock = 0;
-    loop {
-        match vm.step() {
-            Ok((pc, _inst)) => {
-                let (times, clocks) = counter[pc];
-                let tmp_clock = vm.clock();
-                counter[pc] = (times + 1, clocks + (tmp_clock - current_clock));
-                current_clock = tmp_clock;
-            }
-            Err(()) => {
-                // REACH HLT
-                break;
-            }
-        }
-    }
-    println!("clock: {}", vm.clock());
-    println!("content: \n{}", vm.print(18));
-    // 実行時情報を分析
-    let code = split_by_line(code.to_string());
-    println!("line                       code  times  clocks");
-    let mut clocks_sum = 0;
-    for i in 0..4000 {
-        let (times, clocks) = counter[i];
-        if times > 0 {
-            let address = i;
-            let line = table.get(&address).unwrap();
-            if 10 <= line + 1 && line + 1 <= 24 {
-                clocks_sum += clocks;
-            }
-            if line + 1 == 19 {
-                assert_eq!(9538, times);
-            }
-            println!(
-                "{:4}, {:>25}, {:5}, {:6}",
-                line + 1,
-                code.get(line).unwrap(),
-                times,
-                clocks
-            );
-        }
-    }
-    assert_eq!(182144, clocks_sum);
-}
+    let runinfo = run(&mut vm).unwrap();
 
-fn split_by_line(code: String) -> HashMap<usize, String> {
-    let mut ret = HashMap::new();
+    // 3. analyze run information
+    assert_eq!(
+        runinfo.count_clocks(table[&(10 - 1)], table[&(24 - 1)]),
+        Some(182144)
+    );
+    assert_eq!(runinfo.count_exec(table[&(19 - 1)]), 9538);
 
-    for (l, content) in code.split_terminator('\n').enumerate() {
-        ret.insert(l, content.trim().to_string());
-    }
-
-    ret
+    // 4. OMAKE
+    println!("[test: prime500]\n{}", vm.print(18));
 }
