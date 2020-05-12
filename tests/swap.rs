@@ -1,9 +1,10 @@
 use mix_emulator::asm::debug_assemble;
+use mix_emulator::tools::run;
 use mix_emulator::vm::MixVM;
-use std::collections::HashMap;
 
 #[test]
 fn test_swap1() {
+    // 1. make input
     let code = "MAXWDS EQU 1200
                 PERM ORIG *+MAXWDS
                 ANS ORIG *+MAXWDS
@@ -93,17 +94,6 @@ fn test_swap1() {
                 SIZE CON 0
                 START CON 0
                 END BEGIN";
-    let (entry_point, binary) = debug_assemble(code);
-    // addressと行の対応表を作成
-    let mut v = vec![];
-    let mut table = HashMap::new();
-    for (line, address, word) in binary {
-        table.insert(address, line);
-        println!("address: {:4}, BINARY: {}", address, word);
-        // println!("{:2}, {:4}, {}", line, address, word);
-        v.push((address, word));
-    }
-
     let input1 = vec![
         "    (".to_string(),
         five('A'),
@@ -141,92 +131,55 @@ fn test_swap1() {
         "    =".to_string(),
     ];
 
+    // 2. run VM
+    let (entry_point, binary, table) = debug_assemble(code);
     let mut vm = MixVM::new();
-    vm.load(&v);
+    vm.load(&binary);
     vm.set_pc(entry_point);
     vm.read(16, input1);
     vm.read(16, input2);
-    let mut counter = vec![(0, 0); 4000];
-    let mut current_clock = 0;
-    loop {
-        match vm.step() {
-            Ok((pc, _inst)) => {
-                let (times, clocks) = counter[pc];
-                let tmp_clock = vm.clock();
-                counter[pc] = (times + 1, clocks + (tmp_clock - current_clock));
-                current_clock = tmp_clock;
-            }
-            Err(()) => {
-                // REACH HLT
-                break;
-            }
-        }
-    }
+    let runinfo = run(&mut vm).unwrap();
 
-    println!("clock: {}", vm.clock());
-    println!("content: \n{}", vm.print(18));
-    // 実行時情報を分析
-    let code = split_by_line(code.to_string());
-    println!("line                       code  times  clocks");
-    let mut var_a = 0;
-    let mut var_b = 0;
-    let mut var_c = 0;
-    let mut var_d = 0;
-    let mut var_e = 0;
-    let mut var_f = 0;
-    let mut var_g = 0;
-    let mut var_h = 0;
-    let mut var_j = 0;
-    let mut var_k = 0;
-    let mut var_l = 0;
-    let mut var_p = 0;
-    let mut var_q = 0;
-    let mut var_r = 0;
-    let mut var_s = 0;
-    for i in 0..4000 {
-        let (times, clocks) = counter[i];
-        if times > 0 {
-            let address = i;
-            let line = table.get(&address).unwrap();
-            println!(
-                "{:4}, {:>25}, {:5}, {:6}",
-                line + 1,
-                code.get(line).unwrap(),
-                times,
-                clocks
-            );
-
-            let line = line + 1;
-            macro_rules! test {
-                ($begin: expr, $end: expr, $var: expr) => {
-                    if $begin <= line && line <= $end {
-                        if $var != 0 {
-                            assert_eq!(times, $var);
-                        } else {
-                            $var = times;
-                        }
-                    }
-                };
+    // 3. analyze run information
+    macro_rules! test {
+        ($begin: expr, $end: expr, $var: expr) => {
+            for i in $begin..=$end {
+                assert_eq!($var, runinfo.count_exec(table[&(i - 1)]));
             }
-            test!(26, 28, var_a);
-            test!(29, 32, var_b);
-            test!(33, 24, var_c);
-            test!(35, 35, var_d);
-            test!(36, 38, var_c);
-            test!(41, 41, var_e);
-            test!(42, 43, var_f);
-            test!(44, 46, var_g);
-            test!(64, 66, var_h);
-            test!(67, 70, var_j);
-            test!(72, 74, var_q);
-            test!(75, 76, var_k);
-            test!(77, 79, var_l);
-            test!(80, 81, var_p);
-            test!(82, 84, var_r);
-            test!(85, 86, var_s);
-        }
+        };
     }
-    // 1. Kirchhoff
+    let var_a = runinfo.count_exec(table[&(26 - 1)]);
+    test!(26, 28, var_a);
+    let var_b = runinfo.count_exec(table[&(29 - 1)]);
+    test!(29, 32, var_b);
+    let var_c = runinfo.count_exec(table[&(33 - 1)]);
+    test!(33, 34, var_c);
+    let var_d = runinfo.count_exec(table[&(35 - 1)]);
+    test!(35, 35, var_d);
+    test!(36, 38, var_c);
+    let var_e = runinfo.count_exec(table[&(41 - 1)]);
+    test!(41, 41, var_e);
+    let var_f = runinfo.count_exec(table[&(42 - 1)]);
+    test!(42, 43, var_f);
+    let var_g = runinfo.count_exec(table[&(44 - 1)]);
+    test!(44, 46, var_g);
+    let var_h = runinfo.count_exec(table[&(64 - 1)]);
+    test!(64, 66, var_h);
+    let var_j = runinfo.count_exec(table[&(67 - 1)]);
+    test!(67, 70, var_j);
+    let var_q = runinfo.count_exec(table[&(72 - 1)]);
+    test!(72, 74, var_q);
+    let var_k = runinfo.count_exec(table[&(75 - 1)]);
+    test!(75, 76, var_k);
+    let var_l = runinfo.count_exec(table[&(77 - 1)]);
+    test!(77, 79, var_l);
+    let var_p = runinfo.count_exec(table[&(80 - 1)]);
+    test!(80, 81, var_p);
+    let var_r = runinfo.count_exec(table[&(82 - 1)]);
+    test!(82, 84, var_r);
+    let var_s = runinfo.count_exec(table[&(85 - 1)]);
+    test!(85, 86, var_s);
+    // 3-1. Kirchhoff
     assert_eq!(var_a, var_c);
     assert_eq!(var_e, var_r + 1);
     assert_eq!(var_f, var_e + var_g - 1);
@@ -234,7 +187,7 @@ fn test_swap1() {
     assert_eq!(var_j, var_h + var_k - (var_l - var_j));
     assert_eq!(var_k, var_q + var_l - var_p);
     assert_eq!(var_r, var_p - var_q);
-
+    // 3-2. other equation
     let var_x = 2;
     let var_y = 29; // is this 30??
     assert_eq!(var_b + var_c, 16 * var_x - 1);
@@ -245,10 +198,14 @@ fn test_swap1() {
     assert_eq!(var_p, 7); // a,b,c,d,e,f,g -> 7
     assert_eq!(var_s, 1); // (f) -> 1
     assert_eq!(var_g + var_j + var_l, (var_b + var_c) * (var_p + 1));
+
+    // 4. OMAKE
+    println!("[test: swap1]\n{}", vm.print(18));
 }
 
 #[test]
 fn test_swap2() {
+    // 1. make input
     let code = "MAXWDS EQU 1200
                 X ORIG *+MAXWDS
                 T ORIG *+MAXWDS
@@ -335,16 +292,6 @@ fn test_swap2() {
                 EQUALS ALF ____=
                 END BEGIN";
 
-    let (entry_point, binary) = debug_assemble(code);
-    // addressと行の対応表を作成
-    let mut v = vec![];
-    let mut table = HashMap::new();
-    for (line, address, word) in binary {
-        table.insert(address, line);
-        println!("{:2}, {:4}, {}", line, address, word);
-        v.push((address, word));
-    }
-
     let input1 = vec![
         "    (".to_string(),
         five('A'),
@@ -382,114 +329,67 @@ fn test_swap2() {
         "    =".to_string(),
     ];
 
+    // 2. run VM
+    let (entry_point, binary, table) = debug_assemble(code);
     let mut vm = MixVM::new();
-    vm.load(&v);
+    vm.load(&binary);
     vm.set_pc(entry_point);
     vm.read(16, input1);
     vm.read(16, input2);
-    let mut counter = vec![(0, 0); 4000];
-    let mut current_clock = 0;
-    loop {
-        match vm.step() {
-            Ok((pc, _inst)) => {
-                let (times, clocks) = counter[pc];
-                let tmp_clock = vm.clock();
-                counter[pc] = (times + 1, clocks + (tmp_clock - current_clock));
-                current_clock = tmp_clock;
+    let runinfo = run(&mut vm).unwrap();
+
+    // 3. analyze run information
+    macro_rules! test {
+        ($begin: expr, $end: expr, $var: expr) => {
+            for i in $begin..=$end {
+                assert_eq!($var, runinfo.count_exec(table[&(i - 1)]));
             }
-            Err(()) => {
-                // REACH HLT
-                break;
-            }
-        }
+        };
     }
+    let var_a = runinfo.count_exec(table[&(27 - 1)]);
+    test!(27, 27, var_a);
+    let var_b = runinfo.count_exec(table[&(28 - 1)]);
+    test!(28, 30, var_b);
+    let var_c = runinfo.count_exec(table[&(31 - 1)]);
+    test!(31, 32, var_c);
+    let var_d = runinfo.count_exec(table[&(33 - 1)]);
+    test!(33, 34, var_d);
+    let var_e = runinfo.count_exec(table[&(35 - 1)]);
+    test!(35, 36, var_e);
+    let var_f = runinfo.count_exec(table[&(37 - 1)]);
+    test!(37, 39, var_f);
+    let var_g = runinfo.count_exec(table[&(40 - 1)]);
+    test!(40, 40, var_g);
+    let var_h = runinfo.count_exec(table[&(41 - 1)]);
+    test!(41, 44, var_h);
+    let var_j = runinfo.count_exec(table[&(45 - 1)]);
+    test!(45, 48, var_j);
+    let var_k = runinfo.count_exec(table[&(49 - 1)]);
+    test!(49, 50, var_k);
+    let var_l = runinfo.count_exec(table[&(51 - 1)]);
+    test!(51, 51, var_l);
+    let var_p = runinfo.count_exec(table[&(52 - 1)]);
+    test!(52, 52, var_p);
+    let var_q = runinfo.count_exec(table[&(56 - 1)]);
+    test!(56, 57, var_q);
+    let var_r = runinfo.count_exec(table[&(58 - 1)]);
+    test!(58, 59, var_r);
+    let var_s = runinfo.count_exec(table[&(60 - 1)]);
+    test!(60, 60, var_s);
+    let var_t = runinfo.count_exec(table[&(61 - 1)]);
+    test!(61, 65, var_t);
+    let var_w = runinfo.count_exec(table[&(66 - 1)]);
+    test!(66, 66, var_w);
+    let var_z = runinfo.count_exec(table[&(67 - 1)]);
+    test!(67, 68, var_z);
 
-    println!("clock: {}", vm.clock());
-    println!("content: \n{}", vm.print(18));
-
-    // 実行時情報を分析
-    let code = split_by_line(code.to_string());
-    let mut var_a = 0;
-    let mut var_b = 0;
-    let mut var_c = 0;
-    let mut var_d = 0;
-    let mut var_e = 0;
-    let mut var_f = 0;
-    let mut var_g = 0;
-    let mut var_h = 0;
-    let mut var_j = 0;
-    let mut var_k = 0;
-    let mut var_l = 0;
-    let mut var_p = 0;
-    let mut var_q = 0;
-    let mut var_r = 0;
-    let mut var_s = 0;
-    let mut var_t = 0;
-    let mut var_w = 0;
-    let mut var_z = 0;
-    println!("line                       code  times  clocks");
-    for i in 0..4000 {
-        let (times, clocks) = counter[i];
-        if times > 0 {
-            let address = i;
-            let line = table.get(&address).unwrap();
-            println!(
-                "{:4}, {:>25}, {:5}, {:6}",
-                line + 1,
-                code.get(line).unwrap(),
-                times,
-                clocks
-            );
-
-            let line = line + 1;
-            macro_rules! test {
-                ($begin: expr, $end: expr, $var: expr) => {
-                    if $begin <= line && line <= $end {
-                        if $var != 0 {
-                            assert_eq!(times, $var);
-                        } else {
-                            $var = times;
-                        }
-                    }
-                };
-            }
-            test!(27, 27, var_a);
-            test!(28, 30, var_b);
-            test!(31, 32, var_c);
-            test!(33, 34, var_d);
-            test!(35, 36, var_e);
-            test!(37, 39, var_f);
-            test!(40, 40, var_g);
-            test!(41, 44, var_h);
-            test!(45, 48, var_j);
-            test!(49, 50, var_k);
-            test!(51, 51, var_l);
-            test!(52, 52, var_p);
-            test!(56, 57, var_q);
-            test!(58, 59, var_r);
-            test!(60, 60, var_s);
-            test!(61, 65, var_t);
-            test!(66, 66, var_w);
-            test!(67, 68, var_z);
-        }
-    }
-
-    println!("content: \n{}", vm.print(18));
+    // 4. OMAKE
+    println!("[test: swap2]\n{}", vm.print(18));
 }
 
 fn five(c: char) -> String {
     let mut ret = " ".repeat(2).to_string();
     ret.push(c);
     ret.push_str("  ");
-    ret
-}
-
-fn split_by_line(code: String) -> HashMap<usize, String> {
-    let mut ret = HashMap::new();
-
-    for (l, content) in code.split_terminator('\n').enumerate() {
-        ret.insert(l, content.trim().to_string());
-    }
-
     ret
 }

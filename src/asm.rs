@@ -107,11 +107,12 @@ fn is_local_symbol_b(s: &str) -> bool {
     }
 }
 
-pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
+pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>, HashMap<usize, usize>) {
     use PseudoInstruction::*;
 
     // return value
-    let mut binary: Vec<(usize, usize, WordImpl)> = vec![];
+    let mut binary: Vec<(usize, WordImpl)> = vec![];
+    let mut line_address: HashMap<usize, usize> = HashMap::new();
     let mut entry_point = 0usize;
 
     // tables
@@ -176,7 +177,7 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
             if unresolved.is_some() {
                 let unresolved = unresolved.unwrap();
                 for pos in unresolved.iter() {
-                    let word = &mut binary.get_mut(*pos).unwrap().2;
+                    let word = &mut binary.get_mut(*pos).unwrap().1;
                     *word.byte_mut(0).unwrap() =
                         Byte::new((location_counter / Byte::max() as usize) as u32);
                     *word.byte_mut(1).unwrap() =
@@ -208,11 +209,8 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
                     None => panic!(),
                 }
             }
-            binary.push((
-                line,
-                location_counter,
-                WordImpl::from_seq(Sign::Positive, &v),
-            ));
+            binary.push((location_counter, WordImpl::from_seq(Sign::Positive, &v)));
+            line_address.insert(line, location_counter);
             location_counter += 1;
             continue;
         }
@@ -300,7 +298,6 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
                 };
 
                 binary.push((
-                    line,
                     location_counter,
                     WordImpl::from_seq(
                         sign,
@@ -313,6 +310,7 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
                         ],
                     ),
                 ));
+                line_address.insert(line, location_counter);
                 location_counter += 1;
             }
             Attribute::PseudoInstruction(EQU) => {
@@ -328,10 +326,10 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
             Attribute::PseudoInstruction(CON) => {
                 assert!(index.is_none());
                 binary.push((
-                    line,
                     location_counter,
                     WordImpl::from_val(weval(addr, modi.unwrap_or(5))),
                 ));
+                line_address.insert(line, location_counter);
                 location_counter += 1;
             }
             Attribute::PseudoInstruction(END) => {
@@ -345,7 +343,7 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, usize, WordImpl)>) {
         }
     } // main loop
 
-    (entry_point, binary)
+    (entry_point, binary, line_address)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -532,12 +530,9 @@ fn weval(a: i64, f: i64) -> i64 {
 }
 
 pub fn release_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>) {
-    let (entry_point, dbinary) = debug_assemble(code);
+    let (entry_point, binary, _table) = debug_assemble(code);
 
-    (
-        entry_point,
-        dbinary.into_iter().map(|l| (l.1, l.2)).collect(),
-    )
+    (entry_point, binary)
 }
 
 #[cfg(test)]
