@@ -139,7 +139,7 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>, HashMap<usi
             let _ = line_iterator.next();
             continue;
         }
-        let (_loc, attr, _addr) = split_into_loc_ope_addr(content);
+        let (eloc, attr, _addr) = split_into_loc_ope_addr(content);
 
         let (line, content) = if attr == Attribute::PseudoInstruction(END) {
             // if END, generate codes
@@ -148,10 +148,24 @@ pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>, HashMap<usi
                 generated_code.push(unique_symbol + " CON " + &addr);
                 // TODO: remove magic number 7777
                 (7777, generated_code.last().unwrap().as_str())
-            } else if unresolved_symbol.len() != 0 {
-                let loc = unresolved_symbol.keys().next().unwrap();
+            } else if unresolved_symbol.len() > 1 {
+                let mut itr = unresolved_symbol.keys();
+                let mut loc = itr.next().unwrap();
+                if Some(loc.as_str()) == eloc {
+                    loc = itr.next().unwrap()
+                }
                 generated_code.push(loc.clone() + " CON 0");
                 (7777, generated_code.last().unwrap().as_str())
+            } else if unresolved_symbol.len() == 1 {
+                let mut itr = unresolved_symbol.keys();
+                let loc = itr.next().unwrap();
+                if Some(loc.as_str()) == eloc {
+                    // all tables are clear
+                    line_iterator.next().unwrap()
+                } else {
+                    generated_code.push(loc.clone() + " CON 0");
+                    (7777, generated_code.last().unwrap().as_str())
+                }
             } else {
                 // all tables are clear
                 line_iterator.next().unwrap()

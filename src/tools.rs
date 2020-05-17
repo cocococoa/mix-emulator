@@ -22,6 +22,31 @@ pub fn run(vm: &mut MixVM) -> Result<RunInfo, ()> {
     Ok(info)
 }
 
+pub fn debug_run(vm: &mut MixVM) -> Result<(Vec<usize>, RunInfo), ()> {
+    let mut info = RunInfo::new();
+    let mut ret = vec![];
+    let mut clock = 0;
+    loop {
+        // for _i in 0..100 {
+        match vm.step() {
+            Ok((pc, _inst)) => {
+                ret.push(pc);
+                let current_clock = vm.clock();
+                let clock_diff = (current_clock - clock) as usize;
+                clock = current_clock;
+                info.update(pc, clock_diff);
+            }
+            Err(()) => {
+                // REACH HLT
+                // TODO: get more info.
+                break;
+            }
+        }
+    }
+
+    Ok((ret, info))
+}
+
 #[derive(Debug)]
 pub struct RunInfo {
     exec: Vec<usize>,

@@ -63,7 +63,7 @@ impl MixVM {
         // print out
         match f {
             0..=7 => self.tape[f].print(),
-            8..=15 => self.disk[f].print(),
+            8..=15 => self.disk[f - 8].print(),
             16 => self.card_reader.print(),
             17 => self.card_punch.print(),
             18 => self.line_printer.print(),
@@ -72,15 +72,40 @@ impl MixVM {
             _ => unreachable!(),
         }
     }
+    pub fn print_binary(&self, f: usize) -> Vec<i64> {
+        // print out
+        match f {
+            0..=7 => self.tape[f].print_binary(),
+            8..=15 => self.disk[f - 8].print_binary(),
+            16 => self.card_reader.print_binary(),
+            17 => self.card_punch.print_binary(),
+            18 => self.line_printer.print_binary(),
+            19 => self.type_writer_terminal.print_binary(),
+            20 => self.paper_tape.print_binary(),
+            _ => unreachable!(),
+        }
+    }
     pub fn read(&mut self, f: usize, i: Vec<String>) {
         match f {
             0..=7 => self.tape[f].set_input(i),
-            8..=15 => self.disk[f].set_input(i),
+            8..=15 => self.disk[f - 8].set_input(i),
             16 => self.card_reader.set_input(i),
             17 => self.card_punch.set_input(i),
             18 => self.line_printer.set_input(i),
             19 => self.type_writer_terminal.set_input(i),
             20 => self.paper_tape.set_input(i),
+            _ => unreachable!(),
+        }
+    }
+    pub fn read_binary(&mut self, f: usize, i: Vec<i64>) {
+        match f {
+            0..=7 => self.tape[f].set_input_binary(i),
+            8..=15 => self.disk[f - 8].set_input_binary(i),
+            16 => self.card_reader.set_input_binary(i),
+            17 => self.card_punch.set_input_binary(i),
+            18 => self.line_printer.set_input_binary(i),
+            19 => self.type_writer_terminal.set_input_binary(i),
+            20 => self.paper_tape.set_input_binary(i),
             _ => unreachable!(),
         }
     }

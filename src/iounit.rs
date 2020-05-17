@@ -13,7 +13,9 @@ pub trait IOUnit {
     fn busy(&self) -> bool;
 
     fn print(&self) -> String;
+    fn print_binary(&self) -> Vec<i64>;
     fn set_input(&mut self, input: Vec<String>);
+    fn set_input_binary(&mut self, input: Vec<i64>);
 }
 
 #[derive(Debug, Default, Clone)]
@@ -128,12 +130,23 @@ macro_rules! impl_io_trait {
                 }
                 ret
             }
+            fn print_binary(&self) -> Vec<i64> {
+                self.data.iter().map(|word| word.val()).collect()
+            }
             fn set_input(&mut self, input: Vec<String>) {
                 if input.len() != Self::block_size() {
                     panic!();
                 }
                 for word in input {
                     self.data.push(chars_to_word(&word).unwrap());
+                }
+            }
+            fn set_input_binary(&mut self, input: Vec<i64>) {
+                if input.len() % Self::block_size() != 0 {
+                    panic!();
+                }
+                for e in input {
+                    self.data.push(WordImpl::from_val(e));
                 }
             }
         }
