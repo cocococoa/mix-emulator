@@ -46,7 +46,7 @@ impl Byte {
 
 impl std::fmt::Display for Byte {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:2}", self.v)
+        write!(f, "{:<02}", self.v)
     }
 }
 
@@ -210,11 +210,12 @@ impl std::fmt::Display for WordImpl {
             Sign::Positive => "+",
             Sign::Negative => "-",
         };
-        let b = self
+        let mut b = self
             .bytes
             .iter()
             .map(|byte| format!("{} ", byte))
             .collect::<String>();
+        b.pop();
         write!(f, "{} {}", s, b)
     }
 }

@@ -107,12 +107,45 @@ fn is_local_symbol_b(s: &str) -> bool {
     }
 }
 
+pub fn mix_format(code: &str) -> String {
+    let mut formatted = vec![];
+    for line in code.lines() {
+        let line = line.trim();
+        if line.len() == 0 {
+            continue;
+        }
+        if line.starts_with("*") {
+            formatted.push(line.to_string() + "\n");
+            continue;
+        }
+        let (loc, attr, addr) = split_into_loc_ope_addr(line);
+        let loc = loc.unwrap_or("     ");
+        let attr = match attr {
+            Attribute::Instruction(inst) => inst.to_string(),
+            Attribute::PseudoInstruction(pinst) => pinst.to_string(),
+        };
+        formatted.push(
+            [
+                loc,
+                &" ".repeat(10 - loc.len()),
+                &attr,
+                &" ".repeat(5 - attr.len()),
+                addr,
+                "\n",
+            ]
+            .concat(),
+        );
+    }
+
+    formatted.into_iter().collect::<String>()
+}
+
 pub fn debug_assemble(code: &str) -> (usize, Vec<(usize, WordImpl)>, HashMap<usize, usize>) {
     use PseudoInstruction::*;
 
     // return value
     let mut binary: Vec<(usize, WordImpl)> = vec![];
-    let mut line_address: HashMap<usize, usize> = HashMap::new();
+    let mut line_address: HashMap<usize, usize> = HashMap::new(); // (line, address)
     let mut entry_point = 0usize;
 
     // tables

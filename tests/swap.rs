@@ -91,8 +91,6 @@ fn test_swap1() {
                 JNE OPEN
                 INC1 -3
                 JMP OPEN
-                SIZE CON 0
-                START CON 0
                 END BEGIN";
     let input1 = vec![
         "    (".to_string(),

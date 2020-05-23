@@ -1037,3 +1037,17 @@ impl MixVM {
         Ok((current_pc, inst))
     }
 }
+
+pub fn iounit(f: usize) -> String {
+    // print out
+    match f {
+        0..=7 => format!("TAPE{}", f),
+        8..=15 => format!("DISK{}", f - 8),
+        16 => format!("CARD READER"),
+        17 => format!("CARD PUNCH"),
+        18 => format!("LINE PRINTER"),
+        19 => format!("TYPE WRITER TERMINAL"),
+        20 => format!("PAPER TAPE"),
+        _ => unreachable!(),
+    }
+}
