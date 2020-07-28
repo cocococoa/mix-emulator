@@ -6,18 +6,17 @@ Emulator of MIX written in Rust
 
 ```sh
 $ mix-emulator --help
-mix 0.1.0
+mix-emulator 0.1.0
 
 USAGE:
     mix-emulator [FLAGS] [OPTIONS] <input file>
 
 FLAGS:
-    -c, --compile       
-    -d, --debug         
-    -f, --format        
+    -c, --compile       compiler mode
+    -f, --format        formatter mode
     -h, --help          Prints help information
-    -i, --inplace       
-    -S, --preprocess    
+    -i, --inplace       inplace edit, if specified
+    -S, --preprocess    preprocessor mode
     -V, --version       Prints version information
     -v, --verbose       
 
